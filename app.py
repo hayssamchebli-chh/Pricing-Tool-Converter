@@ -79,12 +79,6 @@ vat_rate = st.sidebar.number_input(
     "VAT rate", value=VAT_RATE, min_value=0.0, max_value=0.5,
     step=0.01, format="%.3f")
 
-st.sidebar.divider()
-st.sidebar.header("Scope")
-qty_only = st.sidebar.checkbox(
-    "Only items with a quantity", value=True,
-    help="Off puts every catalogue item on the offer, quantity 0.")
-
 
 # --------------------------------------------------------------------------- #
 # uploads
@@ -135,6 +129,21 @@ if boq_file is not None:
         quantities = per_sheet[chosen]
         st.caption(
             "{} codes read from **{}**.".format(len(quantities), chosen))
+
+# Filtering on quantity only means anything once a quantity source is loaded;
+# without one every quantity is 0 and the filter would empty the offer.
+st.sidebar.divider()
+st.sidebar.header("Scope")
+qty_only = st.sidebar.checkbox(
+    "Only items with a quantity", value=bool(quantities),
+    disabled=not quantities,
+    help="Off puts every catalogue item on the offer, quantity 0.")
+if not quantities:
+    st.sidebar.caption(
+        "No quantities loaded, so every catalogue item goes on the offer at "
+        "quantity 0 — type them into the table below, or into the Qty column "
+        "of the workbook afterwards."
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -206,6 +215,16 @@ metrics[0].metric("Catalogue items", len(items))
 metrics[1].metric("On the offer", len(frame))
 metrics[2].metric("No landed cost", no_landed)
 metrics[3].metric("Skipped sheets", len(skipped))
+
+if frame.empty:
+    st.error(
+        "Every one of the {} catalogue items was filtered out, so the workbook "
+        "would come out empty. **Only items with a quantity** is on but none of "
+        "them has a quantity — either upload a BOQ, or turn that off in the "
+        "sidebar to put the whole catalogue on the offer at quantity 0.".format(
+            len(items))
+    )
+    st.stop()
 
 if skipped:
     st.caption("Ignored, no catalogue header: " + ", ".join(skipped))

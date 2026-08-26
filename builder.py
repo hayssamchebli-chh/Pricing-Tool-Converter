@@ -128,6 +128,10 @@ def _write_catalog_sheet(worksheet, items):
 
     _truncate(worksheet, row)
 
+    if not items:
+        # Keep one styled blank row so the sheet's table has a row to cover.
+        _apply_row_style(worksheet, CATALOG_FIRST_ROW, row_style)
+
     last_row = max(row - 1, CATALOG_FIRST_ROW)
     ref = "A1:{}{}".format(get_column_letter(last_col), last_row)
     for table in worksheet.tables.values():
