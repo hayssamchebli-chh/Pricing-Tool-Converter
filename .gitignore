@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Excel lock files and working data - only the blank template belongs here
+~$*.xlsx
+*.xlsm
