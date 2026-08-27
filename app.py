@@ -86,14 +86,15 @@ vat_rate = st.sidebar.number_input(
 
 st.title("Pricing Tool Converter")
 st.caption(
-    "Sheet7 / Sheet9 style catalogue in — the six offer sheets and the Summary "
-    "out, with live formulas."
+    "
+    
+    "
 )
 
 left, right = st.columns(2)
 with left:
     catalog_file = st.file_uploader(
-        "Catalogue extract (Sheet7 / Sheet9 layout)", type=["xlsx", "xlsm"],
+        "Catalogue extract", type=["xlsx", "xlsm"],
         help="Item No.1 · Description · Unit Price · Advanced Reserved · Stock "
              "Available Quantity · PO Qty · PO not Shipped · Landed USD")
 with right:
