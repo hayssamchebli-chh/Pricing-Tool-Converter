@@ -1,4 +1,4 @@
-"""Turn a Sheet7/Sheet9-style catalogue into the six offer sheets.
+"""Turn a Sheet7/Sheet9-style catalogue extract into the six offer sheets.
 
 The reference workbook is used as a template rather than rebuilt from scratch:
 its column widths, number formats, fills and the constants on row 1 of every
@@ -109,7 +109,7 @@ def _truncate(worksheet, first_row):
 
 
 # --------------------------------------------------------------------------- #
-# catalogue sheets (Sheet7 / Sheet9)
+# the Catalogue lookup table
 # --------------------------------------------------------------------------- #
 
 def _write_catalog_sheet(worksheet, items):

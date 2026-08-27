@@ -2,7 +2,7 @@
 
 The template workbook (`template/pricing_tool_template.xlsx`) contains six
 "offer" sheets that are built from a supplier catalogue extract laid out like
-`Sheet7` / `Sheet9`.  Two physical layouts are in use:
+`Sheet7` / `Sheet9` in the reference file.  Two physical layouts are in use:
 
   * layout ``A`` (compact, 20 columns)  -> O (UE), O (UE3), O (UE4)
   * layout ``B`` (extended, 29 columns) -> O (UU), O (UE1), O (UE2)
@@ -26,7 +26,7 @@ CATALOG_HEADERS = [
     "Landed USD",
 ]
 
-# Column index (1-based) of each catalogue field inside Sheet7 / Sheet9.
+# Column index (1-based) of each catalogue field inside the Catalogue sheet.
 CAT_COL = {
     "code": 1,
     "description": 2,
@@ -39,7 +39,8 @@ CAT_COL = {
 }
 
 FIRST_DATA_ROW = 3          # offer sheets: rows 1-2 are constants + headers
-CATALOG_FIRST_ROW = 2       # Sheet7 / Sheet9: row 1 is the header
+CATALOG_SHEET = "Catalogue"  # the single lookup table every offer sheet reads
+CATALOG_FIRST_ROW = 2       # Catalogue sheet: row 1 is the header
 VAT_RATE = 0.11
 
 
@@ -94,7 +95,7 @@ class SheetSpec:
 
     sheet: str
     layout: str
-    source: str            # "Sheet7" or "Sheet9" - the lookup table it reads
+    source: str            # the lookup table this sheet's VLOOKUPs read from
     currency: str          # "EUR" or "USD" - drives the landed-cost fallback
     prefixes: list = field(default_factory=list)
 
@@ -105,13 +106,15 @@ class SheetSpec:
 
 # Default routing, reverse-engineered from the reference workbook: every offer
 # sheet holds one supplier / product family, identified by the item-code prefix.
+# All six read one lookup table; ``source`` stays per-sheet so a second table
+# can be introduced by editing this list if two suppliers ever collide on a code.
 DEFAULT_SPECS = [
-    SheetSpec("O (UE)",  "A", "Sheet9", "EUR", ["ABS"]),
-    SheetSpec("O (UU)",  "B", "Sheet7", "USD", ["ABR"]),
-    SheetSpec("O (UE1)", "B", "Sheet7", "EUR", ["GAV", "TKM"]),
-    SheetSpec("O (UE2)", "B", "Sheet7", "EUR", ["ABD"]),
-    SheetSpec("O (UE3)", "A", "Sheet7", "EUR", ["ABF"]),
-    SheetSpec("O (UE4)", "A", "Sheet7", "EUR",
+    SheetSpec("O (UE)",  "A", CATALOG_SHEET, "EUR", ["ABS"]),
+    SheetSpec("O (UU)",  "B", CATALOG_SHEET, "USD", ["ABR"]),
+    SheetSpec("O (UE1)", "B", CATALOG_SHEET, "EUR", ["GAV", "TKM"]),
+    SheetSpec("O (UE2)", "B", CATALOG_SHEET, "EUR", ["ABD"]),
+    SheetSpec("O (UE3)", "A", CATALOG_SHEET, "EUR", ["ABF"]),
+    SheetSpec("O (UE4)", "A", CATALOG_SHEET, "EUR",
               ["AAB", "ABA", "ABAE", "ABB", "ABE", "ABJ", "ABZ"]),
 ]
 

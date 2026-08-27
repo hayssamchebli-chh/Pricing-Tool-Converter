@@ -19,8 +19,8 @@ import streamlit as st
 from builder import BuildOptions, assign_sheets, build_workbook
 from catalog import best_quantity_sheet, read_catalog, read_quantities
 from config import (
-    DEFAULT_EUR_FACTOR, DEFAULT_FREIGHT_FACTOR, DEFAULT_SPECS, SheetSpec,
-    VAT_RATE,
+    CATALOG_SHEET, DEFAULT_EUR_FACTOR, DEFAULT_FREIGHT_FACTOR, DEFAULT_SPECS,
+    SheetSpec, VAT_RATE,
 )
 
 st.set_page_config(page_title="Pricing Tool Converter", page_icon="📊",
@@ -54,7 +54,7 @@ def _specs_from_editor(frame: pd.DataFrame) -> list[SheetSpec]:
         row = row.iloc[0]
         prefixes = [p.strip().upper()
                     for p in str(row["Item code prefixes"]).split(",") if p.strip()]
-        specs.append(SheetSpec(base.sheet, base.layout, str(row["Lookup table"]),
+        specs.append(SheetSpec(base.sheet, base.layout, base.source,
                                str(row["Currency"]), prefixes))
     return specs
 
@@ -150,15 +150,14 @@ if not quantities:
 with st.expander("Sheet routing and discounts", expanded=False):
     st.caption(
         "Each offer sheet holds one supplier or product family, matched on the "
-        "item-code prefix; the longest matching prefix wins. *Lookup table* is "
-        "the sheet its VLOOKUPs read from."
+        "item-code prefix; the longest matching prefix wins. Every sheet reads "
+        "its descriptions and prices from the **{}** table.".format(CATALOG_SHEET)
     )
     rules_frame = st.data_editor(
         pd.DataFrame([
             {
                 "Sheet": spec.sheet,
                 "Item code prefixes": ", ".join(spec.prefixes),
-                "Lookup table": spec.source,
                 "Currency": spec.currency,
                 "Discount": 0.0,
             }
@@ -167,8 +166,6 @@ with st.expander("Sheet routing and discounts", expanded=False):
         column_config={
             "Sheet": st.column_config.TextColumn(disabled=True),
             "Item code prefixes": st.column_config.TextColumn(width="large"),
-            "Lookup table": st.column_config.SelectboxColumn(
-                options=["Sheet7", "Sheet9"]),
             "Currency": st.column_config.SelectboxColumn(options=["EUR", "USD"]),
             "Discount": st.column_config.NumberColumn(
                 format="%.2f", min_value=0.0, max_value=0.95,
@@ -288,11 +285,9 @@ if st.button("Build workbook", type="primary", width="stretch"):
                              discounts=discounts),
     )
 
-    st.success("Built {} rows across six offer sheets — Sheet7 {} rows, "
-               "Sheet9 {} rows.".format(
-                   sum(report.rows_per_sheet.values()),
-                   report.catalog_rows.get("Sheet7", 0),
-                   report.catalog_rows.get("Sheet9", 0)))
+    st.success("Built {} rows across six offer sheets, from a {} table of {} "
+               "items.".format(sum(report.rows_per_sheet.values()), CATALOG_SHEET,
+                               report.catalog_rows.get(CATALOG_SHEET, 0)))
     if report.unmatched:
         st.warning(
             "{} code(s) matched no prefix rule and went to the fallback sheet: "

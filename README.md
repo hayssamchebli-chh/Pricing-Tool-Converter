@@ -51,7 +51,7 @@ carried over untouched. Only the data band, the footers and the `Summary`
 cross-references are rewritten.
 
 Every derived cell is a live formula, so the result stays as editable as the
-original: descriptions and prices are `VLOOKUP`s into `Sheet7` / `Sheet9`,
+original: descriptions and prices are `VLOOKUP`s into the `Catalogue` sheet,
 totals are `SUM`s over the actual row range, and the `Summary` points at each
 sheet's real footer rows.
 
@@ -61,22 +61,32 @@ Each offer sheet holds one supplier or product family, matched on the item-code
 prefix — the longest matching prefix wins, so `ABAE-…` beats a plain `ABA`
 rule. The defaults reproduce the reference workbook:
 
-| Sheet | Prefixes | Lookup table | Currency |
-| --- | --- | --- | --- |
-| O (UE) | ABS | Sheet9 | EUR |
-| O (UU) | ABR | Sheet7 | USD |
-| O (UE1) | GAV, TKM | Sheet7 | EUR |
-| O (UE2) | ABD | Sheet7 | EUR |
-| O (UE3) | ABF | Sheet7 | EUR |
-| O (UE4) | AAB, ABA, ABAE, ABB, ABE, ABJ, ABZ | Sheet7 | EUR |
+| Sheet | Prefixes | Currency |
+| --- | --- | --- |
+| O (UE) | ABS | EUR |
+| O (UU) | ABR | USD |
+| O (UE1) | GAV, TKM | EUR |
+| O (UE2) | ABD | EUR |
+| O (UE3) | ABF | EUR |
+| O (UE4) | AAB, ABA, ABAE, ABB, ABE, ABJ, ABZ | EUR |
 
 All of it is editable in the app, per run. A code matching no rule lands on
 `O (UE4)` and is reported rather than dropped, and individual rows can be moved
 to another sheet in the review table.
 
-`Sheet7` and `Sheet9` in the output are rebuilt from the catalogue, split the
-same way the offer sheets are — so `Sheet9` ends up holding exactly the items
-whose offer sheet reads from it.
+### The Catalogue sheet
+
+The output carries one extra tab, `Catalogue`, holding every item read from the
+upload. It is the lookup table the offer sheets read: each row's description and
+unit price is a `VLOOKUP` into it, so deleting the tab breaks every offer row.
+The reference workbook did the same thing across two tabs named `Sheet7` and
+`Sheet9`; item codes are unique, so one table serves all six offer sheets and no
+tab can come out empty.
+
+The sheet's name has nothing to do with the upload — a file whose only tab is
+called `Sheet1` still produces a `Catalogue` tab. To route two suppliers that
+collide on a code to separate tables, give the relevant `SheetSpec` a different
+`source` in `config.py`; the builder writes one table per distinct source.
 
 ### Landed cost
 
