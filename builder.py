@@ -212,11 +212,17 @@ def _write_offer_sheet(worksheet, spec, items, quantities, options):
         worksheet.cell(row, cols.unit_price,
                        "=VLOOKUP({},{}!A:C,3,0)".format(ref, source))
         worksheet.cell(row, cols.landed, _landed_cell(spec, row, options))
-        worksheet.cell(row, cols.disc_unit, "={}{}".format(ex_c, row))
+        # The three ex-works columns stay blank until a price is keyed into
+        # U.P. Ex., rather than showing a row of zeros on everything that is
+        # still priced off the catalogue's landed cost.
+        worksheet.cell(row, cols.disc_unit,
+                       '=IF({ex}{r}=0,"",{ex}{r})'.format(ex=ex_c, r=row))
         worksheet.cell(row, cols.disc,
-                       "=IF({ex}{r}=0,0,1-{du}{r}/{ex}{r})".format(ex=ex_c, du=dunit_c, r=row))
+                       '=IF({ex}{r}=0,"",1-{du}{r}/{ex}{r})'.format(
+                           ex=ex_c, du=dunit_c, r=row))
         worksheet.cell(row, cols.disc_total,
-                       "={}{}*{}{}".format(dunit_c, row, qty_c, row))
+                       '=IF({du}{r}="","",{du}{r}*{q}{r})'.format(
+                           du=dunit_c, q=qty_c, r=row))
         worksheet.cell(row, cols.total_landed,
                        "={}{}*{}{}".format(landed_c, row, qty_c, row))
         worksheet.cell(row, cols.total,
@@ -245,7 +251,8 @@ def _write_offer_sheet(worksheet, spec, items, quantities, options):
 
     footer = [
         (total_row, {
-            cols.disc_total: "=SUM({c}{a}:{c}{b})".format(c=dtotal_c, a=first, b=last),
+            cols.disc_total: '=IF(COUNT({c}{a}:{c}{b})=0,"",SUM({c}{a}:{c}{b}))'.format(
+                c=dtotal_c, a=first, b=last),
             cols.total_landed: "=SUM({c}{a}:{c}{b})".format(c=tlanded_c, a=first, b=last),
             cols.total: "=SUM({c}{a}:{c}{b})".format(c=total_c, a=first, b=last),
         }),

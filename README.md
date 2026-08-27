@@ -103,6 +103,11 @@ and the EUR factor, the USD sheet by freight alone; both factors are set in the
 sidebar (1.15 and 1.16 by default). The reference workbook did this by editing
 cells from constant to formula by hand — here the override is live.
 
+`U.P. Ex.` is left empty for you to fill, and the three columns that read it —
+`D.U.P. Ex.`, `Disc.` and `D.T.P. Ex.`, plus the `D.T.P. Ex.` footer — stay
+blank rather than showing 0.00 on every row that is still priced off the
+catalogue. They come to life on the rows where a price is actually keyed.
+
 ### Two layouts
 
 The template's offer sheets come in two shapes and the app writes each in its
