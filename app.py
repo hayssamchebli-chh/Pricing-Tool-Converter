@@ -19,8 +19,8 @@ import streamlit as st
 from builder import BuildOptions, assign_sheets, build_workbook
 from catalog import best_quantity_sheet, read_catalog, read_quantities
 from config import (
-    CATALOG_SHEET, DEFAULT_EUR_FACTOR, DEFAULT_FREIGHT_FACTOR, DEFAULT_SPECS,
-    SheetSpec, VAT_RATE,
+    DEFAULT_EUR_FACTOR, DEFAULT_FREIGHT_FACTOR, DEFAULT_SPECS, SheetSpec,
+    VAT_RATE,
 )
 
 st.set_page_config(page_title="Pricing Tool Converter", page_icon="📊",
@@ -28,6 +28,11 @@ st.set_page_config(page_title="Pricing Tool Converter", page_icon="📊",
 
 MIME_XLSX = ("application/vnd.openxmlformats-officedocument"
              ".spreadsheetml.sheet")
+
+# Read off the specs rather than importing the constant: Streamlit reruns
+# app.py without reloading already-imported modules, so a freshly added name
+# in config would fail here until the app is rebooted.
+LOOKUP_TABLES = sorted({spec.source for spec in DEFAULT_SPECS})
 
 
 # --------------------------------------------------------------------------- #
@@ -151,7 +156,8 @@ with st.expander("Sheet routing and discounts", expanded=False):
     st.caption(
         "Each offer sheet holds one supplier or product family, matched on the "
         "item-code prefix; the longest matching prefix wins. Every sheet reads "
-        "its descriptions and prices from the **{}** table.".format(CATALOG_SHEET)
+        "its descriptions and prices from the **{}** table.".format(
+            "** / **".join(LOOKUP_TABLES))
     )
     rules_frame = st.data_editor(
         pd.DataFrame([
@@ -286,8 +292,9 @@ if st.button("Build workbook", type="primary", width="stretch"):
     )
 
     st.success("Built {} rows across six offer sheets, from a {} table of {} "
-               "items.".format(sum(report.rows_per_sheet.values()), CATALOG_SHEET,
-                               report.catalog_rows.get(CATALOG_SHEET, 0)))
+               "items.".format(sum(report.rows_per_sheet.values()),
+                               " / ".join(LOOKUP_TABLES),
+                               sum(report.catalog_rows.values())))
     if report.unmatched:
         st.warning(
             "{} code(s) matched no prefix rule and went to the fallback sheet: "
