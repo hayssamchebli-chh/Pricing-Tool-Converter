@@ -85,9 +85,7 @@ vat_rate = st.sidebar.number_input(
 # --------------------------------------------------------------------------- #
 
 st.title("Pricing Tool Converter")
-st.caption(
-
-)
+st.caption( "" )
 
 left, right = st.columns(2)
 with left:
