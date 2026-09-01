@@ -92,8 +92,7 @@ vat_rate = st.sidebar.number_input(
 # --------------------------------------------------------------------------- #
 
 ui.masthead(
-    "Pricing Tool Converter",
-
+    "Pricing Tool Converter"
 )
 
 ui.section(1, "Source files", "the catalogue is required, quantities optional")
