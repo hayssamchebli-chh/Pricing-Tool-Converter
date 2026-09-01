@@ -123,10 +123,25 @@ own:
 | File | Contents |
 | --- | --- |
 | `app.py` | Streamlit UI |
+| `ui.py` | masthead, section headers, metric cards, sheet chips |
+| `.streamlit/config.toml` | palette, type and radii for light and dark |
 | `catalog.py` | reading and normalising the uploaded workbooks |
 | `builder.py` | writing the offer sheets, footers and Summary |
 | `config.py` | column maps for both layouts, routing defaults |
 | `template/pricing_tool_template.xlsx` | the styled template |
+
+### Theme
+
+The palette is navy on a cool near-white, with green kept for success only, and
+a dark variant tuned separately rather than inverted. Type is Inter throughout
+with JetBrains Mono for figures, and numerals are tabular so item codes and
+prices line up in columns.
+
+Streamlit publishes no CSS variables for its active theme, so the chrome in
+`ui.py` derives its tones from `currentColor` — that keeps text and surfaces
+correct in either theme instead of baking in light-mode literals. The one fixed
+hue, the brand accent, is pinned per render from `st.context.theme`. All text
+pairs measure at or above 4.5:1 in both themes.
 
 Changing the routing defaults permanently, or the VAT rate and gross-up
 factors, means editing `config.py`; everything else is adjustable per run in

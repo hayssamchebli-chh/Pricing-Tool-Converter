@@ -1,0 +1,89 @@
+# Visual theme. Colours follow a navy / slate "industrial precision" palette:
+# deep navy for primary actions, a cool near-white ground, and a restrained
+# green reserved for success. Both light and dark variants are defined so the
+# app holds up whichever the viewer's system asks for.
+
+[theme]
+# No "base" pin: this block is the light theme and [theme.dark] the dark one,
+# so the app follows whichever the viewer has chosen.
+primaryColor = "#1E3A5F"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"
+linkColor = "#1D4ED8"
+borderColor = "#E2E8F0"
+dataframeBorderColor = "#E2E8F0"
+dataframeHeaderBackgroundColor = "#F1F5F9"
+codeBackgroundColor = "#F1F5F9"
+codeTextColor = "#334155"
+
+font = "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+headingFont = "Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif"
+codeFont = "JetBrains Mono, ui-monospace, SFMono-Regular, Consolas, monospace"
+baseFontSize = 15
+baseRadius = "0.5rem"
+buttonRadius = "0.5rem"
+
+showSidebarBorder = true
+
+# Semantic accents used by st.success / st.info / st.warning and friends.
+greenColor = "#047857"
+greenBackgroundColor = "#ECFDF5"
+greenTextColor = "#065F46"
+blueColor = "#1D4ED8"
+blueBackgroundColor = "#EFF6FF"
+blueTextColor = "#1E3A8A"
+orangeColor = "#B45309"
+orangeBackgroundColor = "#FFFBEB"
+orangeTextColor = "#92400E"
+redColor = "#DC2626"
+redBackgroundColor = "#FEF2F2"
+redTextColor = "#991B1B"
+grayColor = "#64748B"
+grayBackgroundColor = "#F1F5F9"
+grayTextColor = "#475569"
+
+[theme.sidebar]
+backgroundColor = "#F1F5F9"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"
+primaryColor = "#1E3A5F"
+borderColor = "#E2E8F0"
+showWidgetBorder = true
+
+[theme.dark]
+# Not an inversion of the light values: surfaces are lifted tonally and the
+# primary is lightened so it still reads against a dark ground.
+backgroundColor = "#0B1220"
+secondaryBackgroundColor = "#141E33"
+textColor = "#E6EDF7"
+primaryColor = "#4F83CF"
+linkColor = "#7CA9F0"
+borderColor = "#25334A"
+dataframeBorderColor = "#25334A"
+dataframeHeaderBackgroundColor = "#1A2438"
+codeBackgroundColor = "#141E33"
+codeTextColor = "#C3D0E3"
+
+greenColor = "#34D399"
+greenBackgroundColor = "#0C2A21"
+greenTextColor = "#6EE7B7"
+blueColor = "#60A5FA"
+blueBackgroundColor = "#12233D"
+blueTextColor = "#93C5FD"
+orangeColor = "#FBBF24"
+orangeBackgroundColor = "#2E2312"
+orangeTextColor = "#FCD34D"
+redColor = "#F87171"
+redBackgroundColor = "#2E1518"
+redTextColor = "#FCA5A5"
+grayColor = "#94A3B8"
+grayBackgroundColor = "#1A2438"
+grayTextColor = "#CBD5E1"
+
+[theme.dark.sidebar]
+backgroundColor = "#0E1728"
+secondaryBackgroundColor = "#141E33"
+textColor = "#E6EDF7"
+primaryColor = "#4F83CF"
+borderColor = "#25334A"

@@ -16,6 +16,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
+import ui
 from builder import BuildOptions, assign_sheets, build_workbook
 from catalog import best_quantity_sheet, read_catalog, read_quantities
 from config import (
@@ -25,6 +26,7 @@ from config import (
 
 st.set_page_config(page_title="Pricing Tool Converter", page_icon="📊",
                    layout="wide")
+ui.inject_theme()
 
 MIME_XLSX = ("application/vnd.openxmlformats-officedocument"
              ".spreadsheetml.sheet")
@@ -89,19 +91,30 @@ vat_rate = st.sidebar.number_input(
 # uploads
 # --------------------------------------------------------------------------- #
 
-st.title("Pricing Tool Converter")
-st.caption( "" )
+ui.masthead(
+    "Pricing Tool Converter",
+    "A supplier catalogue extract in, six costed offer sheets and a Summary "
+    "out — every figure a live Excel formula.",
+)
 
-left, right = st.columns(2)
+ui.section(1, "Source files", "the catalogue is required, quantities optional")
+
+left, right = st.columns(2, gap="medium")
 with left:
-    catalog_file = st.file_uploader(
-        "Catalogue extract", type=["xlsx", "xlsm"],
-        help="Item No.1 · Description · Unit Price · Advanced Reserved · Stock "
-             "Available Quantity · PO Qty · PO not Shipped · Landed USD")
+    with st.container(border=True):
+        catalog_file = st.file_uploader(
+            "Catalogue extract", type=["xlsx", "xlsm"],
+            help="Item No.1 · Description · Unit Price · Advanced Reserved · Stock "
+                 "Available Quantity · PO Qty · PO not Shipped · Landed USD")
+        st.caption("Item code, description and unit price in three consecutive "
+                   "columns is enough to be recognised.")
 with right:
-    boq_file = st.file_uploader(
-        "Quantities (optional) — BOQ or its pivot", type=["xlsx", "xlsm"],
-        help="Any sheet pairing an item code column with a quantity column.")
+    with st.container(border=True):
+        boq_file = st.file_uploader(
+            "Quantities — BOQ or its pivot", type=["xlsx", "xlsm"],
+            help="Any sheet pairing an item code column with a quantity column.")
+        st.caption("Leave this empty to start every quantity at 0 and type them "
+                   "in yourself.")
 
 if catalog_file is None:
     st.info("Upload a catalogue extract to start.")
@@ -151,6 +164,8 @@ if not quantities:
 # --------------------------------------------------------------------------- #
 # routing rules
 # --------------------------------------------------------------------------- #
+
+ui.section(2, "Review", "check the routing, then set quantities")
 
 with st.expander("Sheet routing and discounts", expanded=False):
     st.caption(
@@ -238,7 +253,6 @@ if no_landed:
             no_landed)
     )
 
-st.subheader("Rows going onto the offer sheets")
 st.caption("Quantities and sheet assignments are editable here before building.")
 edited = st.data_editor(
     frame,
@@ -257,15 +271,17 @@ edited = st.data_editor(
 )
 
 counts = edited.groupby("Sheet").size().to_dict()
-st.caption(" · ".join("**{}** {}".format(spec.sheet, counts.get(spec.sheet, 0))
-                      for spec in specs))
+ui.sheet_chips({spec.sheet: int(counts.get(spec.sheet, 0)) for spec in specs})
 
 
 # --------------------------------------------------------------------------- #
 # build
 # --------------------------------------------------------------------------- #
 
-if st.button("Build workbook", type="primary", width="stretch"):
+ui.section(3, "Build", "totals, margins and the Summary are wired on the way out")
+
+_cta, _ = st.columns([1, 2.1], gap="medium")
+if _cta.button("Build workbook", type="primary", width="stretch"):
     keep = dict(zip(edited["Item Code"], edited["Sheet"]))
     selected = [item for item in items if item.code in keep]
 
@@ -300,7 +316,8 @@ if st.button("Build workbook", type="primary", width="stretch"):
             "{} code(s) matched no prefix rule and went to the fallback sheet: "
             "{}".format(len(report.unmatched), ", ".join(report.unmatched[:20])))
 
-    st.download_button(
+    _dl, _ = st.columns([1, 2.1], gap="medium")
+    _dl.download_button(
         "Download pricing workbook",
         data=stream.getvalue(),
         file_name="pricing tool {}.xlsx".format(date.today().isoformat()),
