@@ -50,21 +50,29 @@ CSS = FONT_IMPORT + """
 
 /* ---- masthead ---------------------------------------------------------- */
 .ptc-masthead {
-  display: flex; align-items: center; gap: .95rem;
-  padding-bottom: 1.1rem; margin-bottom: .4rem;
+  display: flex; align-items: center; gap: 1.15rem;
+  padding-bottom: 1.35rem; margin-bottom: .4rem;
   border-bottom: 1px solid rgba(128, 138, 157, .32);
   border-bottom-color: color-mix(in srgb, currentColor 16%, transparent);
 }
 .ptc-mark {
-  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 9px;
+  flex: 0 0 auto; width: 56px; height: 56px; border-radius: 13px;
   background: var(--ptc-brand); color: var(--ptc-on-brand);
   display: flex; align-items: center; justify-content: center;
 }
-.ptc-mark svg { width: 21px; height: 21px; }
-.ptc-title { font-size: 1.32rem; font-weight: 650; letter-spacing: -.021em;
-             line-height: 1.2; color: inherit; margin: 0; }
+.ptc-mark svg { width: 29px; height: 29px; }
+/* Display size, so the tracking tightens and the leading closes up.
+   The sizes here carry !important because both elements are <p> inside a
+   markdown container, where Streamlit's own `.st-emotion-cache-… p
+   { font-size: inherit }` outranks a single class and would otherwise flatten
+   them to the 15px body size. The section rules below win on their own because
+   a descendant selector already matches that specificity. */
+.ptc-title { font-size: 2.4rem !important; font-weight: 680;
+             letter-spacing: -.032em; line-height: 1.08; color: inherit;
+             margin: 0; }
 .ptc-sub {
-  font-size: .845rem; margin: .2rem 0 0; line-height: 1.45;
+  font-size: .9rem !important; margin: .34rem 0 0; line-height: 1.5;
+  max-width: 64ch;
   color: rgba(128, 138, 157, .95);
   color: color-mix(in srgb, currentColor 66%, transparent);
 }
@@ -156,8 +164,11 @@ CSS = FONT_IMPORT + """
 }
 
 @media (max-width: 640px) {
-  .ptc-masthead { gap: .7rem; }
-  .ptc-title { font-size: 1.14rem; }
+  .ptc-masthead { gap: .8rem; padding-bottom: 1.05rem; }
+  .ptc-mark { width: 42px; height: 42px; border-radius: 10px; }
+  .ptc-mark svg { width: 22px; height: 22px; }
+  .ptc-title { font-size: 1.55rem !important; letter-spacing: -.025em; }
+  .ptc-sub { font-size: .845rem !important; }
   .ptc-section p { display: none; }
 }
 """
