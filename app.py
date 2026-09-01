@@ -93,8 +93,7 @@ vat_rate = st.sidebar.number_input(
 
 ui.masthead(
     "Pricing Tool Converter",
-    "A supplier catalogue extract in, six costed offer sheets and a Summary "
-    "out — every figure a live Excel formula.",
+
 )
 
 ui.section(1, "Source files", "the catalogue is required, quantities optional")
