@@ -60,6 +60,22 @@ def _clean_code(value) -> str:
     return re.sub(r"\s+", "", str(value)).upper()
 
 
+def code_prefix(code: str) -> str:
+    """The supplier prefix of an item code.
+
+    The segment before the first dash, when that is two or three characters:
+    ``TE-1SNA179534R2200`` gives ``TE`` and ``PHX-3003347`` gives ``PHX``.
+    Anything else falls back to the first three characters - a code with no
+    dash at all, ``RSHXM07285081B000000``, gives ``RSH``, and one whose first
+    segment runs long, ``ABDACS180-04S-17A0-4``, gives ``ABD``.
+    """
+    cleaned = _clean_code(code)
+    head = cleaned.split("-", 1)[0]
+    if "-" in cleaned and 2 <= len(head) <= 3:
+        return head
+    return cleaned[:3]
+
+
 def _number(value, default=0.0) -> float:
     if value is None or value == "":
         return default

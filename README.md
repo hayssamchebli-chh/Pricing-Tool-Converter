@@ -94,8 +94,23 @@ its currency-bearing headers are rewritten to match the currency chosen.
 Names are checked against Excel's own rules — 31 characters, no `[ ] : * ? / \`
 — and against `Summary` and `Catalogue`, which the workbook needs for itself.
 
-A code matching no rule lands on the fallback sheet, `O (UE4)` while it is
-listed and otherwise the last row, and is reported rather than dropped.
+### New prefixes
+
+Prefixes the built-in rules do not reach are worked out from the catalogue and
+listed on the fallback sheet, so the routing table shows every prefix the file
+actually contains rather than sweeping the strays up silently. The routing
+panel opens by itself when a catalogue brings some, and moving them to a sheet
+of their own is then a matter of editing rows.
+
+A prefix is the segment before the first dash when that is two or three
+characters — `TE-1SNA179534R2200` gives `TE`, `PHX-3003347` gives `PHX`.
+Anything else takes the first three characters, which covers a code with no
+dash (`RSHXM07285081B000000` gives `RSH`) and one whose first segment runs long
+(`ABDACS180-04S-17A0-4` gives `ABD`). Dashed and undashed spellings of the same
+supplier therefore land on one prefix.
+
+A code still matching no rule goes to the fallback sheet — `O (UE4)` while it
+is listed, otherwise the last row — and is reported rather than dropped.
 Individual rows can also be moved to another sheet in the review table.
 
 ### The Catalogue sheet

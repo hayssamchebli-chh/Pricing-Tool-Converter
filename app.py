@@ -17,8 +17,12 @@ import pandas as pd
 import streamlit as st
 
 import ui
-from builder import BuildOptions, assign_sheets, build_workbook
-from catalog import best_quantity_sheet, read_catalog, read_quantities
+from builder import (
+    BuildOptions, assign_sheets, build_workbook, fallback_sheet, prefix_rules,
+)
+from catalog import (
+    best_quantity_sheet, code_prefix, read_catalog, read_quantities,
+)
 from config import (
     DEFAULT_EUR_FACTOR, DEFAULT_FREIGHT_FACTOR, DEFAULT_SPECS, FALLBACK_SHEET,
     LAYOUT_LABELS, SUMMARY_SHEET, SheetSpec, VAT_RATE,
@@ -117,6 +121,26 @@ def _cell_text(value) -> str:
     if value is None or pd.isna(value):
         return ""
     return str(value).strip()
+
+
+def _uncovered_prefixes(specs, codes) -> list:
+    """Prefixes in this catalogue that no rule reaches yet.
+
+    Listing them on the fallback sheet puts them in front of whoever is doing
+    the pricing: they arrive somewhere sensible, and moving them to a sheet of
+    their own is then a matter of editing the row rather than knowing they
+    were quietly swept up.
+    """
+    rules = prefix_rules(specs)
+    found = []
+    for code in codes:
+        upper = code.upper()
+        if any(upper.startswith(prefix) for prefix, _ in rules):
+            continue
+        prefix = code_prefix(code)
+        if prefix and prefix not in found:
+            found.append(prefix)
+    return sorted(found)
 
 
 def _discounts_from_editor(frame: pd.DataFrame) -> dict:
@@ -238,7 +262,12 @@ if not quantities:
 
 ui.section(2, "Review", "check the routing, then set quantities")
 
-with st.expander("Sheet routing and discounts", expanded=False):
+# Anything the built-in rules miss is listed on the fallback sheet, so the
+# routing table shows every prefix the catalogue actually contains.
+_fallback = fallback_sheet(DEFAULT_SPECS)
+new_prefixes = _uncovered_prefixes(DEFAULT_SPECS, [item.code for item in items])
+
+with st.expander("Sheet routing and discounts", expanded=bool(new_prefixes)):
     st.caption(
         "Each offer sheet holds one supplier or product family, matched on the "
         "item-code prefix; the longest matching prefix wins. **Add a row to "
@@ -248,11 +277,19 @@ with st.expander("Sheet routing and discounts", expanded=False):
         "the last row. Every sheet reads its descriptions and prices from the "
         "**{}** table.".format(FALLBACK_SHEET, "** / **".join(LOOKUP_TABLES))
     )
+    if new_prefixes:
+        st.caption(
+            "This catalogue brought {} prefix(es) no rule covered, now listed "
+            "on **{}**: {}. Move them to a sheet of their own by editing the "
+            "rows below.".format(len(new_prefixes), _fallback,
+                                 ", ".join(new_prefixes)))
     rules_frame = st.data_editor(
         pd.DataFrame([
             {
                 "Sheet": spec.sheet,
-                "Item code prefixes": ", ".join(spec.prefixes),
+                "Item code prefixes": ", ".join(
+                    list(spec.prefixes)
+                    + (new_prefixes if spec.sheet == _fallback else [])),
                 "Layout": LAYOUT_LABELS[spec.layout],
                 "Currency": spec.currency,
                 "Discount": 0.0,
