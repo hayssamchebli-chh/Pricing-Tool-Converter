@@ -22,10 +22,13 @@ from openpyxl.utils import get_column_letter
 
 from catalog import CatalogItem
 from config import (
-    CATALOG_FIRST_ROW, CATALOG_HEADERS, CAT_COL, DEFAULT_EUR_FACTOR,
-    DEFAULT_FREIGHT_FACTOR, FACTOR_ROW, FALLBACK_SHEET, FIRST_DATA_ROW,
-    SUMMARY_FIRST_ROW, SUMMARY_SHEET, SheetSpec, VAT_RATE,
+    CATALOG_FIRST_ROW, CATALOG_HEADERS, CAT_COL, CURRENCY_HEADERS,
+    DEFAULT_EUR_FACTOR, DEFAULT_FREIGHT_FACTOR, FACTOR_ROW, FALLBACK_SHEET,
+    FIRST_DATA_ROW, LAYOUT_DONORS, SUMMARY_FIRST_ROW, SUMMARY_SHEET, SheetSpec,
+    VAT_RATE,
 )
+
+SUMMARY_LAST_COL = 4        # Landed usd | Discount | Selling usd | Profit
 
 TEMPLATE_PATH = Path(__file__).with_name("template") / "pricing_tool_template.xlsx"
 
@@ -55,19 +58,32 @@ def prefix_rules(specs):
     )
 
 
+def fallback_sheet(specs):
+    """Where codes matching no prefix rule land.
+
+    Normally ``FALLBACK_SHEET``, but the routing is editable and that sheet can
+    be renamed away or removed, so the last sheet listed stands in for it.
+    """
+    names = [spec.sheet for spec in specs]
+    if FALLBACK_SHEET in names:
+        return FALLBACK_SHEET
+    return names[-1] if names else FALLBACK_SHEET
+
+
 def assign_sheets(codes, specs):
     """Map each item code to its target sheet.
 
-    Codes matching no rule go to ``FALLBACK_SHEET`` so nothing is silently
+    Codes matching no rule go to the fallback sheet so nothing is silently
     dropped from the offer.
     """
     rules = prefix_rules(specs)
+    fallback = fallback_sheet(specs)
     assignment = {}
     for code in codes:
         upper = code.upper()
         assignment[code] = next(
             (sheet for prefix, sheet in rules if upper.startswith(prefix)),
-            FALLBACK_SHEET,
+            fallback,
         )
     return assignment
 
@@ -86,6 +102,8 @@ class BuildReport:
     unmatched: list = field(default_factory=list)   # codes with no prefix rule
     catalog_rows: dict = field(default_factory=dict)
     total_rows: dict = field(default_factory=dict)
+    fallback: str = ""                              # where unmatched codes went
+    added_sheets: list = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
@@ -150,6 +168,34 @@ def _write_catalog_sheet(worksheet, items):
 # --------------------------------------------------------------------------- #
 # offer sheets
 # --------------------------------------------------------------------------- #
+
+def _prepare_sheets(workbook, specs):
+    """Make the workbook's offer sheets match the specs.
+
+    A spec naming a sheet the template has not got gets one cloned from the
+    donor for its layout, so a sheet someone invents carries the same columns,
+    widths and number formats as the built-in ones.  Template sheets the specs
+    no longer name are dropped, and the tabs finish in the order listed.
+
+    Cloning happens before any removal, so a donor can itself be on the way out.
+    """
+    for spec in specs:
+        if spec.sheet in workbook.sheetnames:
+            continue
+        sheet = workbook.copy_worksheet(workbook[LAYOUT_DONORS[spec.layout]])
+        sheet.title = spec.sheet
+        # copy_worksheet carries styles but not the frozen header.
+        sheet.freeze_panes = "A3"
+
+    wanted = [spec.sheet for spec in specs]
+    keep = set(wanted) | {SUMMARY_SHEET} | {spec.source for spec in specs}
+    for name in list(workbook.sheetnames):
+        if name not in keep:
+            del workbook[name]
+
+    tail = [name for name in workbook.sheetnames if name not in wanted]
+    workbook._sheets = [workbook[name] for name in wanted + tail]
+
 
 def _freight_cell(spec):
     """Absolute address of the freight factor, parked above the landed header."""
@@ -222,6 +268,11 @@ def _write_offer_sheet(worksheet, spec, items, quantities, options):
     # Every landed cell multiplies by this one, so retyping it here reprices
     # the whole sheet.
     worksheet.cell(FACTOR_ROW, cols.landed, options.freight_factor)
+
+    # Name the trading currency in the headers that carry it. A no-op on the
+    # built-in sheets, and what stops a cloned sheet inheriting the donor's.
+    for field, template in CURRENCY_HEADERS.items():
+        worksheet.cell(2, getattr(cols, field), template.format(spec.currency))
     dunit_c = get_column_letter(cols.disc_unit)
     dtotal_c = get_column_letter(cols.disc_total)
     tlanded_c = get_column_letter(cols.total_landed)
@@ -337,17 +388,27 @@ def _write_summary(worksheet, specs, total_rows):
     first = SUMMARY_FIRST_ROW
     last = first + len(specs) - 1
 
+    # The template carries one row per built-in sheet plus a bold grand total.
+    # Capture both looks up front: adding sheets pushes the total down onto a
+    # row that never had styling, and removing them leaves the old one behind.
+    data_style = _capture_row_style(worksheet, first, SUMMARY_LAST_COL)
+    grand_style = _capture_row_style(worksheet, worksheet.max_row, SUMMARY_LAST_COL)
+
     for index, spec in enumerate(specs):
         row = first + index
         total_row = total_rows[spec.sheet]
         landed = get_column_letter(spec.cols.total_landed)
         total = get_column_letter(spec.cols.total)
+        _apply_row_style(worksheet, row, data_style)
         worksheet.cell(row, 1, "='{}'!{}{}".format(spec.sheet, landed, total_row))
+        worksheet.cell(row, 2, None)
         worksheet.cell(row, 3, "='{}'!{}{}".format(spec.sheet, total, total_row + 2))
         worksheet.cell(row, 4, "=IFERROR((C{r}-A{r})/C{r},0)".format(r=row))
 
     grand = last + 1
+    _apply_row_style(worksheet, grand, grand_style)
     worksheet.cell(grand, 1, "=SUM(A{}:A{})".format(first, last))
+    worksheet.cell(grand, 2, None)
     worksheet.cell(grand, 3, "=SUM(C{}:C{})".format(first, last))
     worksheet.cell(grand, 4, "=IFERROR((C{r}-A{r})/C{r},0)".format(r=grand))
     _truncate(worksheet, grand + 1)
@@ -364,6 +425,12 @@ def build_workbook(items, specs, quantities=None, options=None, template=None):
     workbook = openpyxl.load_workbook(template or TEMPLATE_PATH)
     report = BuildReport()
 
+    # Clone before anything is written, so a new sheet copies a pristine donor.
+    report.added_sheets = [spec.sheet for spec in specs
+                           if spec.sheet not in workbook.sheetnames]
+    _prepare_sheets(workbook, specs)
+
+    report.fallback = fallback_sheet(specs)
     assignment = assign_sheets([item.code for item in items], specs)
     rules = prefix_rules(specs)
     report.unmatched = [

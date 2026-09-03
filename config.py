@@ -119,8 +119,26 @@ DEFAULT_SPECS = [
               ["AAB", "ABA", "ABAE", "ABB", "ABE", "ABJ", "ABZ"]),
 ]
 
-# Sheet that receives catalogue rows whose prefix matches no rule.
+# Sheet that receives catalogue rows whose prefix matches no rule. If the
+# routing no longer lists it, the last sheet named takes the role instead.
 FALLBACK_SHEET = "O (UE4)"
+
+# A sheet added at run time is cloned from the template sheet of its layout, so
+# it inherits the same columns, widths and number formats as the built-in ones.
+# Currency-bearing headers are rewritten afterwards, so the donor's own currency
+# does not matter.
+LAYOUT_DONORS = {"A": "O (UE4)", "B": "O (UE1)"}
+
+# Friendly names for the two layouts, for the routing editor.
+LAYOUT_LABELS = {"A": "Standard", "B": "With price history"}
+
+# Headers that name the trading currency, rewritten per sheet so a sheet set to
+# USD does not keep a donor's "(EUR)" caption.
+CURRENCY_HEADERS = {
+    "ex_works": "U.P. Ex.\n({})",
+    "disc_unit": "D.U.P. Ex.\n({})",
+    "disc_total": "D.T.P. Ex.\n({})",
+}
 
 SUMMARY_SHEET = "Summary"
 SUMMARY_FIRST_ROW = 2

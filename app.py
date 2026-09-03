@@ -21,7 +21,7 @@ from builder import BuildOptions, assign_sheets, build_workbook
 from catalog import best_quantity_sheet, read_catalog, read_quantities
 from config import (
     DEFAULT_EUR_FACTOR, DEFAULT_FREIGHT_FACTOR, DEFAULT_SPECS, FALLBACK_SHEET,
-    SheetSpec, VAT_RATE,
+    LAYOUT_LABELS, SUMMARY_SHEET, SheetSpec, VAT_RATE,
 )
 
 st.set_page_config(page_title="Pricing Tool Converter", page_icon="📊",
@@ -51,19 +51,86 @@ def _load_quantities(payload: bytes, known_codes: tuple = ()):
     return read_quantities(io.BytesIO(payload), known_codes)
 
 
-def _specs_from_editor(frame: pd.DataFrame) -> list[SheetSpec]:
-    specs = []
-    for base in DEFAULT_SPECS:
-        row = frame[frame["Sheet"] == base.sheet]
-        if row.empty:
-            specs.append(base)
+# Excel's own limits on a tab name, plus the tabs this workbook needs for
+# itself. Checked here so a bad name surfaces in the table rather than as an
+# exception halfway through building.
+_BAD_SHEET_CHARS = set("[]:*?/\\")
+_RESERVED_SHEETS = {SUMMARY_SHEET.casefold()} | {t.casefold() for t in LOOKUP_TABLES}
+
+
+def _sheet_name_problem(name: str, taken: set) -> str:
+    if name.casefold() in taken:
+        return "sheet name {!r} is used more than once".format(name)
+    if name.casefold() in _RESERVED_SHEETS:
+        return "{!r} is reserved for the workbook's own tabs".format(name)
+    if len(name) > 31:
+        return "sheet name {!r} is over Excel's 31-character limit".format(name)
+    clashes = sorted(set(name) & _BAD_SHEET_CHARS)
+    if clashes:
+        return "sheet name {!r} cannot contain {}".format(name, " ".join(clashes))
+    return ""
+
+
+def _specs_from_editor(frame: pd.DataFrame) -> tuple[list[SheetSpec], list[str]]:
+    """Read the routing table back, sheets and all.
+
+    Rows can be added, renamed and removed, so the table - not DEFAULT_SPECS -
+    decides which offer sheets the workbook ends up with. A row naming a
+    built-in sheet keeps that sheet's lookup table; an invented one reads from
+    the same catalogue as everything else.
+    """
+    known = {spec.sheet: spec for spec in DEFAULT_SPECS}
+    layouts = {label: code for code, label in LAYOUT_LABELS.items()}
+    specs: list[SheetSpec] = []
+    errors: list[str] = []
+    taken: set = set()
+
+    for position, row in enumerate(frame.to_dict("records"), start=1):
+        name = _cell_text(row.get("Sheet"))
+        if not name:
+            continue                      # an empty row the editor left behind
+        problem = _sheet_name_problem(name, taken)
+        if problem:
+            errors.append("Row {}: {}.".format(position, problem))
             continue
-        row = row.iloc[0]
+        taken.add(name.casefold())
+        base = known.get(name)
         prefixes = [p.strip().upper()
-                    for p in str(row["Item code prefixes"]).split(",") if p.strip()]
-        specs.append(SheetSpec(base.sheet, base.layout, base.source,
-                               str(row["Currency"]), prefixes))
-    return specs
+                    for p in _cell_text(row.get("Item code prefixes")).split(",")
+                    if p.strip()]
+        specs.append(SheetSpec(
+            name,
+            layouts.get(_cell_text(row.get("Layout")), base.layout if base else "A"),
+            base.source if base else LOOKUP_TABLES[0],
+            _cell_text(row.get("Currency")) or "EUR",
+            prefixes,
+        ))
+
+    if not specs and not errors:
+        errors.append("At least one sheet is needed.")
+    return specs, errors
+
+
+def _cell_text(value) -> str:
+    """Text of an editor cell. A cleared cell arrives as NaN, which is truthy,
+    so `or ""` alone would turn a blank row into a sheet named "nan"."""
+    if value is None or pd.isna(value):
+        return ""
+    return str(value).strip()
+
+
+def _discounts_from_editor(frame: pd.DataFrame) -> dict:
+    discounts = {}
+    for row in frame.to_dict("records"):
+        name = _cell_text(row.get("Sheet"))
+        if not name:
+            continue
+        raw = row.get("Discount")
+        try:
+            discounts[name] = 0.0 if raw is None or pd.isna(raw) else float(raw)
+        except (TypeError, ValueError):
+            discounts[name] = 0.0
+    return discounts
 
 
 # --------------------------------------------------------------------------- #
@@ -174,25 +241,42 @@ ui.section(2, "Review", "check the routing, then set quantities")
 with st.expander("Sheet routing and discounts", expanded=False):
     st.caption(
         "Each offer sheet holds one supplier or product family, matched on the "
-        "item-code prefix; the longest matching prefix wins, and anything "
-        "matching no rule lands on **{}**. Every sheet reads its descriptions "
-        "and prices from the **{}** table.".format(
-            FALLBACK_SHEET, "** / **".join(LOOKUP_TABLES))
+        "item-code prefix; the longest matching prefix wins. **Add a row to "
+        "create a new sheet** — name it what you like and give it prefixes; "
+        "rename or delete rows to reshape the workbook. Anything matching no "
+        "rule lands on the fallback sheet: **{}** while it is listed, otherwise "
+        "the last row. Every sheet reads its descriptions and prices from the "
+        "**{}** table.".format(FALLBACK_SHEET, "** / **".join(LOOKUP_TABLES))
     )
     rules_frame = st.data_editor(
         pd.DataFrame([
             {
                 "Sheet": spec.sheet,
                 "Item code prefixes": ", ".join(spec.prefixes),
+                "Layout": LAYOUT_LABELS[spec.layout],
                 "Currency": spec.currency,
                 "Discount": 0.0,
             }
             for spec in DEFAULT_SPECS
         ]),
+        num_rows="dynamic",
         column_config={
-            "Sheet": st.column_config.TextColumn(disabled=True),
-            "Item code prefixes": st.column_config.TextColumn(width="large"),
-            "Currency": st.column_config.SelectboxColumn(options=["EUR", "USD"]),
+            "Sheet": st.column_config.TextColumn(
+                required=True,
+                help="The tab name in the workbook. Max 31 characters, and no "
+                     "[ ] : * ? / \\"),
+            "Item code prefixes": st.column_config.TextColumn(
+                width="large",
+                help="Comma separated, matched against the start of each item "
+                     "code — e.g. PHX, TE"),
+            "Layout": st.column_config.SelectboxColumn(
+                options=list(LAYOUT_LABELS.values()), required=True,
+                help="'With price history' adds the Last U.P. / Cur. / Date "
+                     "columns; 'Standard' leaves them out."),
+            "Currency": st.column_config.SelectboxColumn(
+                options=["EUR", "USD"], required=True,
+                help="EUR grosses ex-works up by freight and the EUR factor; "
+                     "USD by freight alone."),
             "Discount": st.column_config.NumberColumn(
                 format="%.2f", min_value=0.0, max_value=0.95,
                 help="Written into the sheet's Discount cell."),
@@ -200,8 +284,13 @@ with st.expander("Sheet routing and discounts", expanded=False):
         hide_index=True, width="stretch", key="rules",
     )
 
-specs = _specs_from_editor(rules_frame)
-discounts = dict(zip(rules_frame["Sheet"], rules_frame["Discount"]))
+specs, rule_errors = _specs_from_editor(rules_frame)
+if rule_errors:
+    st.error("The routing table needs fixing before anything can be built:\n\n"
+             + "\n".join("- " + problem for problem in rule_errors))
+    st.stop()
+
+discounts = _discounts_from_editor(rules_frame)
 assignment = assign_sheets([item.code for item in items], specs)
 
 
@@ -315,16 +404,19 @@ if _cta.button("Build workbook", type="primary", width="stretch"):
                              discounts=discounts),
     )
 
-    st.success("Built {} rows across six offer sheets, from a {} table of {} "
-               "items.".format(sum(report.rows_per_sheet.values()),
-                               " / ".join(LOOKUP_TABLES),
-                               sum(report.catalog_rows.values())))
+    st.success("Built {} rows across {} offer sheets, from a {} table of {} "
+               "items.{}".format(
+                   sum(report.rows_per_sheet.values()), len(specs),
+                   " / ".join(LOOKUP_TABLES), sum(report.catalog_rows.values()),
+                   " Added: {}.".format(", ".join(report.added_sheets))
+                   if report.added_sheets else ""))
     if report.unmatched:
         st.warning(
             "{} code(s) matched no prefix rule, so they went to **{}** — the "
             "fallback sheet. To place them elsewhere, add their prefix under "
-            "*Sheet routing and discounts* and build again: {}".format(
-                len(report.unmatched), FALLBACK_SHEET,
+            "*Sheet routing and discounts*, or add a sheet of their own, and "
+            "build again: {}".format(
+                len(report.unmatched), report.fallback,
                 ", ".join(report.unmatched[:20])))
 
     _dl, _ = st.columns([1, 2.1], gap="medium")

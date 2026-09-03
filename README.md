@@ -84,9 +84,19 @@ rule. The defaults reproduce the reference workbook:
 | O (UE3) | ABF | EUR |
 | O (UE4) | AAB, ABA, ABAE, ABB, ABE, ABJ, ABZ | EUR |
 
-All of it is editable in the app, per run. A code matching no rule lands on
-`O (UE4)` and is reported rather than dropped, and individual rows can be moved
-to another sheet in the review table.
+All of it is editable in the app, per run — **including which sheets exist**.
+Adding a row to the routing table creates a sheet: name it, give it prefixes,
+pick a layout and a currency. Renaming a row renames the sheet, and deleting one
+drops it. A new sheet is cloned from the template sheet of its layout, so it
+carries the same columns, widths and number formats as the built-in ones, and
+its currency-bearing headers are rewritten to match the currency chosen.
+
+Names are checked against Excel's own rules — 31 characters, no `[ ] : * ? / \`
+— and against `Summary` and `Catalogue`, which the workbook needs for itself.
+
+A code matching no rule lands on the fallback sheet, `O (UE4)` while it is
+listed and otherwise the last row, and is reported rather than dropped.
+Individual rows can also be moved to another sheet in the review table.
 
 ### The Catalogue sheet
 
