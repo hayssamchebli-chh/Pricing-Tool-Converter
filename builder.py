@@ -34,8 +34,8 @@ FOOTER_LABELS = ["Total (USD)", "Discount", "Net Total (USD)", "VAT",
 
 # Rows priced off ex-works rather than the uploaded landed cost are flagged on
 # the Qty cell, in the yellow the reference workbook already used there.
-UNDER_STOCK_FILL = PatternFill("solid", start_color="FFFFFF00",
-                               end_color="FFFFFF00")
+OVER_STOCK_FILL = PatternFill("solid", start_color="FFFFFF00",
+                              end_color="FFFFFF00")
 
 
 # --------------------------------------------------------------------------- #
@@ -159,14 +159,16 @@ def _freight_cell(spec):
 def _landed_cell(spec, row, options):
     """Landed unit cost, chosen by quantity against stock on hand.
 
-    Ordering at or above the stock figure takes the landed cost as uploaded -
-    the catalogue value, mirrored into the ``Landed USD`` reference column.
-    Below it the row is priced off the ex-works figure instead, grossed up by
-    the freight factor alone for a USD supplier and by freight and the EUR
-    conversion for a European one.
+    A quantity the stock covers takes the landed cost as uploaded - the
+    catalogue value, mirrored into the ``Landed USD`` reference column, which
+    is what that stock actually cost to land.  Reaching or exceeding stock
+    means the order has to be imported, so the row is priced off the ex-works
+    figure instead, grossed up by the freight factor alone for a USD supplier
+    and by freight and the EUR conversion for a European one.
 
     Freight is read from a cell rather than baked in, so retyping it in the
-    sheet reprices every row at once.
+    sheet reprices every row at once.  The EUR factor stays a literal, fixed
+    from the app at build time.
     """
     cols = spec.cols
     qty = "{}{}".format(get_column_letter(cols.qty), row)
@@ -178,7 +180,7 @@ def _landed_cell(spec, row, options):
         gross_up = "{}*{}".format(ex_works, freight)
     else:
         gross_up = "{}*{}*{}".format(ex_works, freight, options.eur_factor)
-    return "=IF({}>={},{},{})".format(qty, stock, reference, gross_up)
+    return "=IF({}<{},{},{})".format(qty, stock, reference, gross_up)
 
 
 def _write_offer_sheet(worksheet, spec, items, quantities, options):
@@ -269,16 +271,16 @@ def _write_offer_sheet(worksheet, spec, items, quantities, options):
     if count == 0:
         _apply_row_style(worksheet, first, data_style)
 
-    # Flag the rows the landed formula sends down the ex-works branch. A rule
-    # rather than a painted fill, so it keeps up as quantities are retyped in
-    # Excel. Anchored on the first data row: column absolute, row relative, so
-    # Excel walks it down the range.
+    # Flag the rows the landed formula sends down the ex-works branch - the
+    # ones stock cannot cover. A rule rather than a painted fill, so it keeps
+    # up as quantities are retyped in Excel. Anchored on the first data row:
+    # column absolute, row relative, so Excel walks it down the range.
     worksheet.conditional_formatting.add(
         "{c}{a}:{c}{b}".format(c=qty_c, a=first, b=last),
         FormulaRule(
-            formula=["AND(ISNUMBER(${s}{a}),${q}{a}<${s}{a})".format(
+            formula=["AND(ISNUMBER(${s}{a}),${q}{a}>=${s}{a})".format(
                 q=qty_c, s=stock_c, a=first)],
-            fill=UNDER_STOCK_FILL, stopIfTrue=False,
+            fill=OVER_STOCK_FILL, stopIfTrue=False,
         ),
     )
 

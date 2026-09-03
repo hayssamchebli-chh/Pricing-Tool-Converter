@@ -93,14 +93,15 @@ collide on a code to separate tables, give the relevant `SheetSpec` a different
 `U. Landed (USD)` is written as:
 
 ```
-=IF(<Qty> >= <Stock>, <Landed USD>, <U.P. Ex.> * $freight [* EUR factor])
+=IF(<Qty> < <Stock>, <Landed USD>, <U.P. Ex.> * $freight [* EUR factor])
 ```
 
-Quantity decides the branch. A row ordering at or above the stock figure takes
-the landed cost exactly as uploaded. Below stock it is priced off the ex-works
-figure instead, grossed up by freight and the EUR factor on a EUR sheet and by
-freight alone on the USD one — and its **Qty cell turns yellow**, so the rows
-still waiting on an ex-works price are visible at a glance.
+Quantity decides the branch. While stock covers the quantity the row takes the
+landed cost exactly as uploaded — what that stock actually cost to land. Once
+Qty reaches or exceeds stock the order has to be imported, so it is priced off
+the ex-works figure instead, grossed up by freight and the EUR factor on a EUR
+sheet and by freight alone on the USD one — and its **Qty cell turns yellow**,
+so the rows still waiting on an ex-works price are visible at a glance.
 
 The yellow is a conditional-formatting rule rather than a painted fill, so it
 keeps up as quantities are retyped in Excel.
@@ -108,8 +109,8 @@ keeps up as quantities are retyped in Excel.
 The freight factor is written into the cell directly above the `U. Landed`
 header — `F1` on a compact sheet, `O1` on an extended one — and every landed
 formula multiplies by it, so retyping it there reprices the sheet. The EUR
-conversion factor is still a literal in the formula, taken from the sidebar at
-build time.
+conversion factor stays a literal in the formula, fixed from the sidebar at
+build time and deliberately not surfaced as a cell.
 
 `U.P. Ex.` is left empty for you to fill, and the three columns that read it —
 `D.U.P. Ex.`, `Disc.` and `D.T.P. Ex.`, plus the `D.T.P. Ex.` footer — stay
