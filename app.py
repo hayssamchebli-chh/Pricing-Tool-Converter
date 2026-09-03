@@ -72,9 +72,11 @@ def _specs_from_editor(frame: pd.DataFrame) -> list[SheetSpec]:
 
 st.sidebar.header("Costing assumptions")
 st.sidebar.caption(
-    "Every *U. Landed* cell reads the catalogue cost until an ex-works price "
-    "is keyed into *U.P. Ex.*, at which point it grosses that up by these "
-    "factors instead — EUR sheets by both, USD sheets by freight alone."
+    "*U. Landed* takes the uploaded cost on rows where Qty reaches stock on "
+    "hand. Below stock it prices off *U.P. Ex.* grossed up by these factors — "
+    "EUR sheets by both, USD sheets by freight alone — and the Qty cell turns "
+    "yellow. Freight is written into the sheet above the *U. Landed* header, "
+    "so it stays adjustable in Excel."
 )
 freight_factor = st.sidebar.number_input(
     "Freight / clearing factor", value=DEFAULT_FREIGHT_FACTOR,
@@ -220,12 +222,13 @@ if qty_only:
 
 missing_qty = [code for code in quantities
                if code not in {item.code for item in items}]
-no_landed = int((frame["Landed USD"] == 0).sum())
+# Rows the landed formula sends down the ex-works branch: Qty below stock.
+under_stock = int((frame["Qty"] < frame["Stock"]).sum())
 
 metrics = st.columns(4)
 metrics[0].metric("Catalogue items", len(items))
 metrics[1].metric("On the offer", len(frame))
-metrics[2].metric("No landed cost", no_landed)
+metrics[2].metric("Priced off ex-works", under_stock)
 metrics[3].metric("Skipped sheets", len(skipped))
 
 if frame.empty:
@@ -243,11 +246,12 @@ if skipped:
 if missing_qty:
     with st.expander("{} quantity codes not in the catalogue".format(len(missing_qty))):
         st.write(", ".join(sorted(missing_qty)))
-if no_landed:
+if under_stock:
     st.info(
-        "{} item(s) carry no landed cost in the catalogue and will price at 0 "
-        "until an ex-works price is keyed into their *U.P. Ex.* cell.".format(
-            no_landed)
+        "{} row(s) have Qty below stock on hand, so *U. Landed* prices them off "
+        "*U.P. Ex.* rather than the uploaded landed cost. Their Qty cell is "
+        "flagged yellow in the workbook, and they carry 0 until an ex-works "
+        "price is keyed in.".format(under_stock)
     )
 
 st.caption("Quantities and sheet assignments are editable here before building.")

@@ -16,19 +16,26 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import openpyxl
+from openpyxl.formatting.rule import FormulaRule
+from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
 from catalog import CatalogItem
 from config import (
     CATALOG_FIRST_ROW, CATALOG_HEADERS, CAT_COL, DEFAULT_EUR_FACTOR,
-    DEFAULT_FREIGHT_FACTOR, FALLBACK_SHEET, FIRST_DATA_ROW, SUMMARY_FIRST_ROW,
-    SUMMARY_SHEET, SheetSpec, VAT_RATE,
+    DEFAULT_FREIGHT_FACTOR, FACTOR_ROW, FALLBACK_SHEET, FIRST_DATA_ROW,
+    SUMMARY_FIRST_ROW, SUMMARY_SHEET, SheetSpec, VAT_RATE,
 )
 
 TEMPLATE_PATH = Path(__file__).with_name("template") / "pricing_tool_template.xlsx"
 
 FOOTER_LABELS = ["Total (USD)", "Discount", "Net Total (USD)", "VAT",
                  "Total Inc. VAT (USD)"]
+
+# Rows priced off ex-works rather than the uploaded landed cost are flagged on
+# the Qty cell, in the yellow the reference workbook already used there.
+UNDER_STOCK_FILL = PatternFill("solid", start_color="FFFFFF00",
+                               end_color="FFFFFF00")
 
 
 # --------------------------------------------------------------------------- #
@@ -144,26 +151,34 @@ def _write_catalog_sheet(worksheet, items):
 # offer sheets
 # --------------------------------------------------------------------------- #
 
-def _landed_cell(spec, row, options):
-    """Landed unit cost: the catalogue figure, or an ex-works gross-up.
+def _freight_cell(spec):
+    """Absolute address of the freight factor, parked above the landed header."""
+    return "${}${}".format(get_column_letter(spec.cols.landed), FACTOR_ROW)
 
-    The catalogue value (mirrored into the ``Landed USD`` reference column)
-    applies until the estimator keys an ex-works price into ``U.P. Ex.`` - the
-    manual override for an item never actually imported, or one whose recorded
-    cost is stale.  That price is then grossed up by freight alone for a USD
-    supplier, by freight and the EUR conversion for a European one.  Writing it
-    as one formula keeps the override live instead of needing the cell rebuilt
-    by hand, which is how the reference workbook ended up part constant and
-    part formula.
+
+def _landed_cell(spec, row, options):
+    """Landed unit cost, chosen by quantity against stock on hand.
+
+    Ordering at or above the stock figure takes the landed cost as uploaded -
+    the catalogue value, mirrored into the ``Landed USD`` reference column.
+    Below it the row is priced off the ex-works figure instead, grossed up by
+    the freight factor alone for a USD supplier and by freight and the EUR
+    conversion for a European one.
+
+    Freight is read from a cell rather than baked in, so retyping it in the
+    sheet reprices every row at once.
     """
-    ex_works = "{}{}".format(get_column_letter(spec.cols.ex_works), row)
-    reference = "{}{}".format(get_column_letter(spec.cols.landed_usd), row)
+    cols = spec.cols
+    qty = "{}{}".format(get_column_letter(cols.qty), row)
+    stock = "{}{}".format(get_column_letter(cols.stock), row)
+    ex_works = "{}{}".format(get_column_letter(cols.ex_works), row)
+    reference = "{}{}".format(get_column_letter(cols.landed_usd), row)
+    freight = _freight_cell(spec)
     if spec.currency == "USD":
-        gross_up = "{}*{}".format(ex_works, options.freight_factor)
+        gross_up = "{}*{}".format(ex_works, freight)
     else:
-        gross_up = "{}*{}*{}".format(
-            ex_works, options.freight_factor, options.eur_factor)
-    return "=IF({}=0,{},{})".format(ex_works, reference, gross_up)
+        gross_up = "{}*{}*{}".format(ex_works, freight, options.eur_factor)
+    return "=IF({}>={},{},{})".format(qty, stock, reference, gross_up)
 
 
 def _write_offer_sheet(worksheet, spec, items, quantities, options):
@@ -192,9 +207,14 @@ def _write_offer_sheet(worksheet, spec, items, quantities, options):
 
     code_c = get_column_letter(cols.code)
     qty_c = get_column_letter(cols.qty)
+    stock_c = get_column_letter(cols.stock)
     price_c = get_column_letter(cols.unit_price)
     landed_c = get_column_letter(cols.landed)
     ex_c = get_column_letter(cols.ex_works)
+
+    # Every landed cell multiplies by this one, so retyping it here reprices
+    # the whole sheet.
+    worksheet.cell(FACTOR_ROW, cols.landed, options.freight_factor)
     dunit_c = get_column_letter(cols.disc_unit)
     dtotal_c = get_column_letter(cols.disc_total)
     tlanded_c = get_column_letter(cols.total_landed)
@@ -248,6 +268,19 @@ def _write_offer_sheet(worksheet, spec, items, quantities, options):
 
     if count == 0:
         _apply_row_style(worksheet, first, data_style)
+
+    # Flag the rows the landed formula sends down the ex-works branch. A rule
+    # rather than a painted fill, so it keeps up as quantities are retyped in
+    # Excel. Anchored on the first data row: column absolute, row relative, so
+    # Excel walks it down the range.
+    worksheet.conditional_formatting.add(
+        "{c}{a}:{c}{b}".format(c=qty_c, a=first, b=last),
+        FormulaRule(
+            formula=["AND(ISNUMBER(${s}{a}),${q}{a}<${s}{a})".format(
+                q=qty_c, s=stock_c, a=first)],
+            fill=UNDER_STOCK_FILL, stopIfTrue=False,
+        ),
+    )
 
     footer = [
         (total_row, {

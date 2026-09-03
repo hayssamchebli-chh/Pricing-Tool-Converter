@@ -93,15 +93,23 @@ collide on a code to separate tables, give the relevant `SheetSpec` a different
 `U. Landed (USD)` is written as:
 
 ```
-=IF(<U.P. Ex.>=0, <Landed USD>, <U.P. Ex.> * freight [* EUR factor])
+=IF(<Qty> >= <Stock>, <Landed USD>, <U.P. Ex.> * $freight [* EUR factor])
 ```
 
-The catalogue's landed cost applies until an ex-works price is keyed into the
-`U.P. Ex.` column, which is the manual override for an item never actually
-imported or one whose recorded cost is stale. EUR sheets gross up by freight
-and the EUR factor, the USD sheet by freight alone; both factors are set in the
-sidebar (1.15 and 1.16 by default). The reference workbook did this by editing
-cells from constant to formula by hand — here the override is live.
+Quantity decides the branch. A row ordering at or above the stock figure takes
+the landed cost exactly as uploaded. Below stock it is priced off the ex-works
+figure instead, grossed up by freight and the EUR factor on a EUR sheet and by
+freight alone on the USD one — and its **Qty cell turns yellow**, so the rows
+still waiting on an ex-works price are visible at a glance.
+
+The yellow is a conditional-formatting rule rather than a painted fill, so it
+keeps up as quantities are retyped in Excel.
+
+The freight factor is written into the cell directly above the `U. Landed`
+header — `F1` on a compact sheet, `O1` on an extended one — and every landed
+formula multiplies by it, so retyping it there reprices the sheet. The EUR
+conversion factor is still a literal in the formula, taken from the sidebar at
+build time.
 
 `U.P. Ex.` is left empty for you to fill, and the three columns that read it —
 `D.U.P. Ex.`, `Disc.` and `D.T.P. Ex.`, plus the `D.T.P. Ex.` footer — stay

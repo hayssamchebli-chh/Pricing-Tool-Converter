@@ -39,6 +39,7 @@ CAT_COL = {
 }
 
 FIRST_DATA_ROW = 3          # offer sheets: rows 1-2 are constants + headers
+FACTOR_ROW = 1              # freight factor sits above the U. Landed header
 CATALOG_SHEET = "Catalogue"  # the single lookup table every offer sheet reads
 CATALOG_FIRST_ROW = 2       # Catalogue sheet: row 1 is the header
 VAT_RATE = 0.11
