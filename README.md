@@ -43,6 +43,14 @@ apart and lets you pick one rather than adding them together. A code appearing
 on several panels is summed. Without this file every quantity starts at 0 and
 can be typed into the table.
 
+The quantity column is found by header (`Qty`, `Quantity`, `Sum of QTY`, …).
+The **code** column is found by content: each column is scored against the codes
+already read from the catalogue and the best match wins. Header names for it
+vary per export — `No.2` in one, `Part No.` in another — and exports often carry
+a second identifier in the neighbouring column, so a name match alone picks the
+wrong column as readily as the right one. Names are still used as a fallback
+when nothing overlaps.
+
 ## What comes out
 
 A workbook built on `template/pricing_tool_template.xlsx`, so column widths,

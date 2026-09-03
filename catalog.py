@@ -23,8 +23,12 @@ _NUMERIC_FIELDS = (
 )
 
 _FIELD_ALIASES = {
+    # "no." is deliberately absent: exports that use it for the catalogue code
+    # tend to also carry an internal id under that same label, so the column is
+    # found by content instead - see _matching_code_column.
     "code": {"item no.1", "item no", "item no.", "item code", "part no.",
-             "part no", "part number", "material", "row labels"},
+             "part no", "part number", "material", "row labels",
+             "no.2", "no. 2", "no2"},
     "description": {"description", "desc", "item description"},
     "unit_price": {"unit price", "list price", "price"},
     "advanced_reserved": {"advanced reserved", "advance reserved", "reserved"},
@@ -175,15 +179,42 @@ def read_catalog(file_like) -> tuple[list[CatalogItem], list[str]]:
     return list(items.values()), skipped
 
 
-def read_quantities(file_like) -> dict[str, dict[str, float]]:
+def _matching_code_column(rows, header_idx, known_codes):
+    """Pick the column that actually holds catalogue codes.
+
+    Header names for the code column vary per export - ``No.2`` in one, ``Part
+    No.`` in another - and a neighbouring column often carries a different
+    identifier entirely, so matching on the name alone picks the wrong one as
+    easily as the right one.  Scoring each column against the codes already
+    read from the catalogue settles it on the data instead.
+    """
+    if not known_codes:
+        return None
+    body = rows[header_idx + 1:]
+    width = max((len(row) for row in body), default=0)
+    best_col, best_hits = None, 0
+    for col in range(width):
+        hits = sum(1 for row in body
+                   if col < len(row) and _clean_code(row[col]) in known_codes)
+        if hits > best_hits:
+            best_col, best_hits = col, hits
+    return best_col
+
+
+def read_quantities(file_like, known_codes=None) -> dict[str, dict[str, float]]:
     """Return ``{worksheet: {item code: total qty}}`` for a BOQ workbook.
 
     Both the raw BOQ and the "sum of qty" pivot built from it usually live in
     the same file and describe the same quantities, so they are kept apart per
     sheet rather than merged - the caller picks one.  Within a sheet a repeated
     code is summed, which is how the same part on several panels adds up.
+
+    Passing ``known_codes`` - the codes read from the catalogue - lets the code
+    column be found by content rather than by header name, which is what makes
+    an unfamiliar export work without a new alias.
     """
     workbook = openpyxl.load_workbook(file_like, data_only=True, read_only=True)
+    known_codes = set(known_codes or ())
     per_sheet: dict[str, dict[str, float]] = {}
 
     for sheet in workbook.worksheets:
@@ -196,9 +227,13 @@ def read_quantities(file_like) -> dict[str, dict[str, float]]:
             labels = [_norm(c) for c in row]
             candidate_qty = next(
                 (i for i, lab in enumerate(labels) if lab in _QTY_ALIASES), None)
-            mapping = _map_headers(row)
-            if candidate_qty is not None and "code" in mapping:
-                header_idx, qty_col, code_col = row_idx, candidate_qty, mapping["code"]
+            if candidate_qty is None:
+                continue
+            candidate_code = _matching_code_column(rows, row_idx, known_codes)
+            if candidate_code is None:
+                candidate_code = _map_headers(row).get("code")
+            if candidate_code is not None:
+                header_idx, qty_col, code_col = row_idx, candidate_qty, candidate_code
                 break
         if header_idx is None:
             continue

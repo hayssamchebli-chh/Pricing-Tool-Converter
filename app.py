@@ -47,8 +47,8 @@ def _load_catalog(payload: bytes):
 
 
 @st.cache_data(show_spinner=False)
-def _load_quantities(payload: bytes):
-    return read_quantities(io.BytesIO(payload))
+def _load_quantities(payload: bytes, known_codes: tuple = ()):
+    return read_quantities(io.BytesIO(payload), known_codes)
 
 
 def _specs_from_editor(frame: pd.DataFrame) -> list[SheetSpec]:
@@ -130,9 +130,14 @@ if not items:
 
 quantities: dict[str, float] = {}
 if boq_file is not None:
-    per_sheet = _load_quantities(boq_file.getvalue())
+    per_sheet = _load_quantities(
+        boq_file.getvalue(), tuple(sorted(item.code for item in items)))
     if not per_sheet:
-        st.warning("No quantity columns found in that file — quantities left at 0.")
+        st.warning(
+            "No quantity column found in that file. The app looks for a column "
+            "headed *Qty* or *Quantity* next to a column of item codes — "
+            "quantities left at 0."
+        )
     else:
         default = best_quantity_sheet(per_sheet)
         names = list(per_sheet)
