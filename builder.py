@@ -166,6 +166,10 @@ def _landed_cell(spec, row, options):
     figure instead, grossed up by the freight factor alone for a USD supplier
     and by freight and the EUR conversion for a European one.
 
+    On the ex-works branch the cell stays blank until a price is actually
+    keyed, rather than showing a 0 that reads like a costed row.  It fills in
+    the moment ``U.P. Ex.`` is entered.
+
     Freight is read from a cell rather than baked in, so retyping it in the
     sheet reprices every row at once.  The EUR factor stays a literal, fixed
     from the app at build time.
@@ -180,7 +184,8 @@ def _landed_cell(spec, row, options):
         gross_up = "{}*{}".format(ex_works, freight)
     else:
         gross_up = "{}*{}*{}".format(ex_works, freight, options.eur_factor)
-    return "=IF({}<{},{},{})".format(qty, stock, reference, gross_up)
+    return '=IF({q}<{s},{ref},IF({ex}="","",{gross}))'.format(
+        q=qty, s=stock, ref=reference, ex=ex_works, gross=gross_up)
 
 
 def _write_offer_sheet(worksheet, spec, items, quantities, options):
@@ -245,13 +250,18 @@ def _write_offer_sheet(worksheet, spec, items, quantities, options):
         worksheet.cell(row, cols.disc_total,
                        '=IF({du}{r}="","",{du}{r}*{q}{r})'.format(
                            du=dunit_c, q=qty_c, r=row))
+        # An uncosted row leaves U. Landed blank, and blank times a quantity is
+        # #VALUE!, so the two cells reading it stay blank in step rather than
+        # erroring or claiming a 0.00% margin on a cost nobody has entered.
         worksheet.cell(row, cols.total_landed,
-                       "={}{}*{}{}".format(landed_c, row, qty_c, row))
+                       '=IF({l}{r}="","",{l}{r}*{q}{r})'.format(
+                           l=landed_c, q=qty_c, r=row))
         worksheet.cell(row, cols.total,
                        "={}{}*{}{}".format(price_c, row, qty_c, row))
         worksheet.cell(
             row, cols.margin,
-            "=IFERROR(({p}{r}*(1-$D${d})-{l}{r})/({p}{r}*(1-$D${d})),0)".format(
+            '=IF({l}{r}="","",'
+            'IFERROR(({p}{r}*(1-$D${d})-{l}{r})/({p}{r}*(1-$D${d})),0))'.format(
                 p=price_c, l=landed_c, r=row, d=discount_row),
         )
         for col, source_col in (

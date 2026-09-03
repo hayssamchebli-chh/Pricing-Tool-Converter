@@ -93,7 +93,8 @@ collide on a code to separate tables, give the relevant `SheetSpec` a different
 `U. Landed (USD)` is written as:
 
 ```
-=IF(<Qty> < <Stock>, <Landed USD>, <U.P. Ex.> * $freight [* EUR factor])
+=IF(<Qty> < <Stock>, <Landed USD>,
+    IF(<U.P. Ex.> = "", "", <U.P. Ex.> * $freight [* EUR factor]))
 ```
 
 Quantity decides the branch. While stock covers the quantity the row takes the
@@ -102,6 +103,13 @@ Qty reaches or exceeds stock the order has to be imported, so it is priced off
 the ex-works figure instead, grossed up by freight and the EUR factor on a EUR
 sheet and by freight alone on the USD one — and its **Qty cell turns yellow**,
 so the rows still waiting on an ex-works price are visible at a glance.
+
+Such a row stays **blank** rather than showing 0, which would read like a
+costed line worth nothing. `T. Landed` and `Margin` blank out with it, since
+blank times a quantity is `#VALUE!` and a 0.00% margin on a cost nobody has
+entered is worse than no figure at all. All three fill in together the moment
+`U.P. Ex.` is keyed. The column totals ignore the blanks, so the footers and
+the Summary stay correct while the sheet is part-priced.
 
 The yellow is a conditional-formatting rule rather than a painted fill, so it
 keeps up as quantities are retyped in Excel.

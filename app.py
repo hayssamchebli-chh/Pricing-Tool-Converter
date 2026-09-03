@@ -251,8 +251,8 @@ if over_stock:
     st.info(
         "{} row(s) have Qty at or above stock on hand, so *U. Landed* prices "
         "them off *U.P. Ex.* rather than the uploaded landed cost. Their Qty "
-        "cell is flagged yellow in the workbook, and they carry 0 until an "
-        "ex-works price is keyed in.".format(over_stock)
+        "cell is flagged yellow in the workbook and *U. Landed* stays blank "
+        "until an ex-works price is keyed in.".format(over_stock)
     )
 
 st.caption("Quantities and sheet assignments are editable here before building.")
