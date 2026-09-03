@@ -41,6 +41,10 @@ _FIELD_ALIASES = {
 
 _QTY_ALIASES = {"sum of qty", "sum of quantity", "qty", "quantity", "total qty"}
 
+# What the catalogue itself calls its code column. Used to recognise a
+# catalogue sheet and to settle which column holds the codes.
+CANONICAL_CODE = "item no.1"
+
 
 def _norm(value) -> str:
     """Lower-case, collapse whitespace - for tolerant header matching."""
@@ -98,22 +102,36 @@ def _map_headers(header_row) -> dict:
         for field, aliases in _FIELD_ALIASES.items():
             if label in aliases and field not in mapping:
                 mapping[field] = idx
+    # The catalogue's own code header outranks any other alias in the row, so a
+    # sheet carrying both "Item No.1" and, say, "Part No." keys on the former.
+    for idx, cell in enumerate(header_row):
+        if _norm(cell) == CANONICAL_CODE:
+            mapping["code"] = idx
+            break
     return mapping
 
 
-def _find_header_row(rows, required, scan=12, contiguous=False):
+def _find_header_row(rows, required, scan=12, mode="loose"):
     """Locate the header row: catalogue exports sometimes carry a title above.
 
-    With ``contiguous`` the code / description / unit-price headers must sit in
-    three consecutive columns, which is what distinguishes a real ``Sheet7``
-    style catalogue from an offer sheet (whose header row uses the same words
-    but spreads them across columns B, C and E).
+    ``mode`` decides how strict a candidate has to be, so a real catalogue can
+    be told apart from an offer sheet, whose header row uses the same words:
+
+    * ``canonical`` - the row carries a column headed exactly ``Item No.1``,
+      the catalogue's own name for the code column. Offer sheets say "Item
+      Code", so this separates them however the columns are arranged.
+    * ``contiguous`` - code / description / unit price sit in three
+      consecutive columns, the shape of an untouched export.
+    * ``loose`` - the three are present anywhere in the row.
     """
     for row_idx, row in enumerate(rows[:scan]):
         mapping = _map_headers(row)
         if not all(field in mapping for field in required):
             continue
-        if contiguous:
+        if mode == "canonical":
+            if not any(_norm(cell) == CANONICAL_CODE for cell in row):
+                continue
+        elif mode == "contiguous":
             code = mapping["code"]
             if mapping["description"] != code + 1 or mapping["unit_price"] != code + 2:
                 continue
@@ -136,16 +154,21 @@ def read_catalog(file_like) -> tuple[list[CatalogItem], list[str]]:
     sheets = [(s.title, [list(r) for r in s.iter_rows(values_only=True)])
               for s in workbook.worksheets]
     required = ("code", "description", "unit_price")
-    # Prefer the strict Sheet7/Sheet9 shape; only fall back to a loose match if
-    # nothing in the file looks like a proper catalogue.
-    strict = any(_find_header_row(rows, required, contiguous=True)[1]
-                 for _, rows in sheets if rows)
+    # Take the most specific reading the file supports, then apply it to every
+    # sheet. Recognising the catalogue by its "Item No.1" header rather than by
+    # column adjacency means extra columns can sit between code, description
+    # and unit price without the sheet being passed over.
+    mode = next(
+        (candidate for candidate in ("canonical", "contiguous", "loose")
+         if any(_find_header_row(rows, required, mode=candidate)[1]
+                for _, rows in sheets if rows)),
+        "loose",
+    )
 
     for title, rows in sheets:
         if not rows:
             continue
-        header_idx, mapping = _find_header_row(
-            rows, required, contiguous=strict)
+        header_idx, mapping = _find_header_row(rows, required, mode=mode)
         if mapping is None:
             skipped.append(title)
             continue

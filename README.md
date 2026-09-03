@@ -17,10 +17,14 @@ On Windows, double-clicking `run.cmd` does the same thing.
 
 ## What goes in
 
-**Catalogue extract** (required). Any worksheet whose header row carries an item
-code, a description and a unit price in three consecutive columns is read; a
-file holding both a `Sheet7`-style and a `Sheet9`-style tab is read in one pass.
-The eight recognised columns are the ones in the reference workbook:
+**Catalogue extract** (required). A worksheet is treated as catalogue when its
+header row carries a column headed **`Item No.1`** — the catalogue's own name
+for the code column — alongside a description and a unit price. Offer sheets
+say "Item Code" instead, which is what keeps them from being read as catalogue
+when the reference workbook itself is uploaded. Columns need not be adjacent:
+anything extra can sit between them. A file holding several catalogue tabs is
+read in one pass. The eight recognised columns are the ones in the reference
+workbook:
 
 | Column | Used for |
 | --- | --- |
@@ -34,7 +38,9 @@ The eight recognised columns are the ones in the reference workbook:
 | Landed USD | landed cost, drives `T. Landed` and the margin |
 
 Header matching is tolerant of case, spacing and common variants (`Part No.`,
-`List Price`, `Stock Qty`, …).
+`List Price`, `Stock Qty`, …). If nothing in the file carries `Item No.1`, the
+reader falls back first to the three sitting in consecutive columns, then to
+finding them anywhere in the row.
 
 **Quantities** (optional). Either the raw BOQ or the "sum of qty" pivot built
 from it — any sheet pairing an item-code column with a quantity column. Both
