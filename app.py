@@ -20,8 +20,8 @@ import ui
 from builder import BuildOptions, assign_sheets, build_workbook
 from catalog import best_quantity_sheet, read_catalog, read_quantities
 from config import (
-    DEFAULT_EUR_FACTOR, DEFAULT_FREIGHT_FACTOR, DEFAULT_SPECS, SheetSpec,
-    VAT_RATE,
+    DEFAULT_EUR_FACTOR, DEFAULT_FREIGHT_FACTOR, DEFAULT_SPECS, FALLBACK_SHEET,
+    SheetSpec, VAT_RATE,
 )
 
 st.set_page_config(page_title="Pricing Tool Converter", page_icon="📊",
@@ -174,9 +174,10 @@ ui.section(2, "Review", "check the routing, then set quantities")
 with st.expander("Sheet routing and discounts", expanded=False):
     st.caption(
         "Each offer sheet holds one supplier or product family, matched on the "
-        "item-code prefix; the longest matching prefix wins. Every sheet reads "
-        "its descriptions and prices from the **{}** table.".format(
-            "** / **".join(LOOKUP_TABLES))
+        "item-code prefix; the longest matching prefix wins, and anything "
+        "matching no rule lands on **{}**. Every sheet reads its descriptions "
+        "and prices from the **{}** table.".format(
+            FALLBACK_SHEET, "** / **".join(LOOKUP_TABLES))
     )
     rules_frame = st.data_editor(
         pd.DataFrame([
@@ -320,8 +321,11 @@ if _cta.button("Build workbook", type="primary", width="stretch"):
                                sum(report.catalog_rows.values())))
     if report.unmatched:
         st.warning(
-            "{} code(s) matched no prefix rule and went to the fallback sheet: "
-            "{}".format(len(report.unmatched), ", ".join(report.unmatched[:20])))
+            "{} code(s) matched no prefix rule, so they went to **{}** — the "
+            "fallback sheet. To place them elsewhere, add their prefix under "
+            "*Sheet routing and discounts* and build again: {}".format(
+                len(report.unmatched), FALLBACK_SHEET,
+                ", ".join(report.unmatched[:20])))
 
     _dl, _ = st.columns([1, 2.1], gap="medium")
     _dl.download_button(
