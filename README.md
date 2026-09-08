@@ -1,7 +1,11 @@
 # Pricing Tool Converter
 
-Streamlit app that turns a supplier catalogue extract — the `Sheet7` / `Sheet9`
-layout — into the six offer sheets and the `Summary` of `pricing tool.xlsx`.
+Two tendering tools in one Streamlit app, a tab each:
+
+| Tab | Turns | Into |
+| --- | --- | --- |
+| **Pricing Tool Converter** | a supplier catalogue extract, the `Sheet7` / `Sheet9` layout | the six offer sheets and the `Summary` of `pricing tool.xlsx` |
+| **Last Purchase Price** | a purchase-history export | an Order workbook carrying the three most recent prices per item |
 
 ## Running it
 
@@ -10,10 +14,18 @@ pip install -r requirements.txt
 ```
 
 ```bash
-streamlit run app.py
+streamlit run home.py
 ```
 
 On Windows, double-clicking `run.cmd` does the same thing.
+
+`home.py` is only the tab bar. Each tab is its own script and runs on its own,
+so `streamlit run app.py` still opens the Pricing Tool Converter by itself,
+exactly as it did before the second tab existed.
+
+---
+
+# The Pricing Tool Converter tab
 
 ## What goes in
 
@@ -174,17 +186,87 @@ own:
   extra *Last U.P. / Cur. / Date* history blocks that push the costing columns
   from F–T out to O–AC
 
+---
+
+# The Last Purchase Price tab
+
+Upload a purchase-history export — one row per invoice line — and get back the
+Order workbook with each item's three most recent unit prices already in place.
+
+## What goes in
+
+A `.xlsx`, `.xlsm`, `.xls` or `.csv` carrying an item code, a posting date and a
+unit cost; a description is used when there is one. Headers are matched loosely,
+so `No_` / `Item Code` / `Part No`, `InvLine_Posting_Date` / `Posting Date` /
+`Date` and `InvLine_Unit_Cost` / `Unit Price` / `Cost` all read correctly. Lines
+with no usable date or price are skipped and counted back to you.
+
+## What comes out
+
+Per item the lines are sorted newest first and the top three fill:
+
+| Order column | Holds |
+| --- | --- |
+| `Last U.P.(1) (EUR)` / `Date(1)` | most recent purchase |
+| `Last U.P.(2) (EUR)` / `Date(2)` | second most recent |
+| `Last U.P.(3) (EUR)` / `Date(3)` | third most recent |
+
+`Item Code` and `Description` are filled too. `Qty`, `U.P.`, `Agr.U.P.` and the
+FOB columns are left for whoever is pricing, and the template's own formulas —
+`Diff.UP/AGR`, `Diff. UP/LAST UP`, the totals — come down with every row, with
+the `Total (EUR)` row re-pointed at the new block. Items bought fewer than three
+times leave the unused slots empty.
+
+## Two modes
+
+**New Order from the template** builds a fresh Order listing every item the
+history mentions, one row each, sorted by item code. It uses
+`template/order_template.xlsx` unless you upload a template of your own.
+
+**Fill an Order I already have** leaves your rows exactly as they are and writes
+only the six price and date columns, matching on `Item Code`. Rows whose code
+the history does not mention are left untouched and listed back to you.
+
+## Repeated lines
+
+Exports often carry the same invoice line twice. **Collapse repeated lines**, on
+by default, counts rows sharing a date *and* a price as one purchase, so the
+three slots hold three distinct purchases; turn it off to take the last three
+rows as they come. Where two purchases share a date at different prices, the one
+further down the file is taken as the more recent.
+
+## Note on the template
+
+In `Order.xlsx` the `Last U.P.(3) (EUR)` and `FOB U.P.(EUR) 2025` columns carry
+a date number format, so a price typed into either shows as a date. The app
+corrects this for the six columns it fills; `FOB U.P.(EUR) 2025` is left alone,
+being outside what it writes.
+
+---
+
 ## Files
 
 | File | Contents |
 | --- | --- |
-| `app.py` | Streamlit UI |
+| `home.py` | the tab bar — the entry point |
+| `app.py` | Pricing Tool Converter UI |
 | `ui.py` | masthead, section headers, metric cards, sheet chips |
 | `.streamlit/config.toml` | palette, type and radii for light and dark |
 | `catalog.py` | reading and normalising the uploaded workbooks |
 | `builder.py` | writing the offer sheets, footers and Summary |
 | `config.py` | column maps for both layouts, routing defaults |
 | `template/pricing_tool_template.xlsx` | the styled template |
+| `last_purchase.py` | Last Purchase Price UI |
+| `purchases.py` | reading the history, ranking prices, writing the Order |
+| `template/order_template.xlsx` | the blank Order |
+
+`purchases.py` shares nothing with `builder.py` or `catalog.py` — the two tabs
+sit side by side without touching each other's code. It also runs on its own:
+
+```bash
+python purchases.py "last purchases.xlsx" -o "Order.xlsx"
+python purchases.py "last purchases.xlsx" --into "Order.xlsx" -o "Order filled.xlsx"
+```
 
 ### Theme
 
