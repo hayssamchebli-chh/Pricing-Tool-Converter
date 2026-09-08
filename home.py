@@ -12,6 +12,20 @@ from __future__ import annotations
 
 import streamlit as st
 
+# The tab labels ship at .875rem, small enough beside a 2.4rem page title that
+# the tabs read as toolbar furniture rather than the app's top-level switch.
+# The only markdown Streamlit puts in the header is those labels, so scoping to
+# stHeader leaves every other paragraph in the app alone.
+TAB_CSS = """
+<style>
+[data-testid="stHeader"] [data-testid="stMarkdownContainer"] p {
+  font-size: 1.05rem;
+  font-weight: 560;
+  letter-spacing: -.005em;
+}
+</style>
+"""
+
 PAGES = [
     st.Page("app.py", title="Pricing Tool Converter", icon="📊",
             url_path="pricing-tool", default=True),
@@ -26,4 +40,5 @@ except Exception:
     # every version that has st.navigation at all, so the app still runs.
     navigation = st.navigation(PAGES)
 
+st.markdown(TAB_CSS, unsafe_allow_html=True)
 navigation.run()
