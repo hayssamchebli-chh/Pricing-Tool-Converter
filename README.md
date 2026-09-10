@@ -302,6 +302,18 @@ restated, so editing them in row 1 still reprices every row.
 
 `U.P. Ex.` stays yours to key — every costed column follows from it.
 
+## Qty colours
+
+The `Qty` cells are coloured against `Stock AV (BC)`: **green** while the stock
+covers the order, **yellow** once the quantity is greater. These are rules
+rather than painted fills, so they keep up as quantities are retyped in Excel.
+A row with no stock figure stays uncoloured — no figure is not a stock of zero.
+
+Note the boundary: a quantity **equal** to stock is coloured green, while
+`U. Landed` switches to the ex-works branch at `Qty < Stock`, so that one row
+reads as covered but prices as an import. Aligning them is a one-character
+change in either direction.
+
 ---
 
 ## Files

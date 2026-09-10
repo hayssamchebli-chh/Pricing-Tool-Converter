@@ -25,7 +25,9 @@ from pathlib import Path
 
 import pandas as pd
 from openpyxl import load_workbook
+from openpyxl.formatting.rule import FormulaRule
 from openpyxl.formula.translate import Translator
+from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
 TEMPLATE_PATH = Path(__file__).with_name("template") / "calcul_template.xlsx"
@@ -77,6 +79,12 @@ CALCUL_TARGETS = {
 PRICE_FORMAT = "#,##0.00"
 DATE_FORMAT = "mm-dd-yy"
 TEXT_FORMAT = "General"
+
+# Qty against stock on hand: green while the stock covers the order, yellow
+# once it does not. Yellow is the one the reference workbooks already use for
+# this; the green is Excel's own "Good" fill, which stays legible under black.
+COVERED_FILL = PatternFill("solid", start_color="FFC6EFCE", end_color="FFC6EFCE")
+SHORT_FILL = PatternFill("solid", start_color="FFFFFF00", end_color="FFFFFF00")
 
 
 class BuildError(Exception):
@@ -335,6 +343,34 @@ def _landed_formula(columns, row, gross_up):
         ex=at("disc_unit"), gross=gross_up)
 
 
+def _flag_quantities(worksheet, columns, first_row, last_row):
+    """Colour the Qty cells by whether stock on hand covers the order.
+
+    Rules rather than painted fills, so the colours keep up as quantities are
+    retyped in Excel. Anchored on the first data row with the column absolute
+    and the row relative, which is how Excel walks a rule down its range.
+
+    A row whose stock is blank is left uncoloured: no stock figure is not the
+    same as a stock of nothing.
+    """
+    if not all(key in columns for key in ("qty", "stock")) or last_row < first_row:
+        return
+    qty = get_column_letter(columns["qty"])
+    stock = get_column_letter(columns["stock"])
+    span = "{c}{a}:{c}{b}".format(c=qty, a=first_row, b=last_row)
+    known = "AND(ISNUMBER(${s}{a}),ISNUMBER(${q}{a})".format(
+        q=qty, s=stock, a=first_row)
+    for test, fill in ((("<=", COVERED_FILL)), ((">", SHORT_FILL))):
+        worksheet.conditional_formatting.add(
+            span,
+            FormulaRule(
+                formula=["{},${}{}{}${}{})".format(
+                    known, qty, first_row, test, stock, first_row)],
+                fill=fill, stopIfTrue=False,
+            ),
+        )
+
+
 def _write_history(worksheet, row, columns, history):
     """Fill the nine Last U.P. / Cur. / Date cells, newest sale first."""
     for slot in range(MAX_HISTORY):
@@ -439,6 +475,7 @@ def fill_calcul(source, histories, catalog, price_field=DEFAULT_PRICE_FIELD):
     first_data_row = header_row + 1
 
     matched, no_history, no_catalog = [], [], []
+    filled_rows = []
     for row in range(first_data_row, last_row + 1):
         raw = worksheet.cell(row, columns["code"]).value
         code = re.sub(r"\s+", "", str(raw)).upper() if raw is not None else ""
@@ -448,10 +485,14 @@ def fill_calcul(source, histories, catalog, price_field=DEFAULT_PRICE_FIELD):
         had_history, had_item = _fill_row(
             worksheet, row, columns, code, histories, catalog, gross_up)
         matched.append(code)
+        filled_rows.append(row)
         if not had_history:
             no_history.append(code)
         if not had_item:
             no_catalog.append(code)
+
+    if filled_rows:
+        _flag_quantities(worksheet, columns, filled_rows[0], filled_rows[-1])
 
     stream = io.BytesIO()
     workbook.save(stream)
@@ -520,6 +561,8 @@ def build_calcul(lines, histories, catalog, template=None):
         item = catalog.get(code.upper())
         if "description" in columns and not (item and item.description) and description:
             worksheet.cell(row, columns["description"]).value = description
+
+    _flag_quantities(worksheet, columns, first_data_row, last_data_row)
 
     for index, captured in enumerate(footer):
         row = new_footer_row + index
