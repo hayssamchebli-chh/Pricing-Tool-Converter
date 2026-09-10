@@ -327,18 +327,23 @@ def _capture_row(worksheet, row):
 
 
 def _landed_formula(columns, row, gross_up):
-    """``U. Landed`` under the offer sheets' own stock condition.
+    """``U. Landed``, chosen by quantity against the stock on hand.
 
-    A quantity the stock covers takes the landed cost as uploaded; reaching it
-    means the order has to be imported, so the row prices off the ex-works
-    figure grossed up by whatever factors the template already applies —
-    lifted from its own formula rather than restated here.
+    A quantity the stock covers — up to and including all of it — takes the
+    landed cost as uploaded; going past it means the order has to be imported,
+    so the row prices off the ex-works figure grossed up by whatever factors
+    the template already applies, lifted from its own formula rather than
+    restated here.
+
+    The ``<=`` matches the Qty colouring exactly, so a green cell always means
+    the catalogue's landed cost and a yellow one always means an import. The
+    other tab's offer sheets draw that line at ``<``.
     """
     needed = ("qty", "stock", "landed_ref", "disc_unit")
     if not all(key in columns for key in needed):
         return None
     at = lambda key: "{}{}".format(get_column_letter(columns[key]), row)
-    return '=IF({qty}<{stock},{ref},IF({ex}="","",{gross}))'.format(
+    return '=IF({qty}<={stock},{ref},IF({ex}="","",{gross}))'.format(
         qty=at("qty"), stock=at("stock"), ref=at("landed_ref"),
         ex=at("disc_unit"), gross=gross_up)
 

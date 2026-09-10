@@ -289,16 +289,21 @@ Leave the box empty and you upload a Calcul workbook instead; its own figures,
 
 ## U. Landed
 
-Rewritten to the condition the other offer sheets use:
+Rewritten to choose by quantity against the stock on hand:
 
 ```
-=IF(Qty < Stock AV, Landed usd, IF(D.U.P. Ex.="", "", D.U.P. Ex. * factors))
+=IF(Qty <= Stock AV, Landed usd, IF(D.U.P. Ex.="", "", D.U.P. Ex. * factors))
 ```
 
-A quantity the stock covers takes the landed cost as uploaded; reaching it means
-the order has to be imported, so the row prices off the ex-works figure instead.
-The gross-up factors are lifted from the sheet's own formula rather than
-restated, so editing them in row 1 still reprices every row.
+A quantity the stock covers takes the landed cost as uploaded; going past it
+means the order has to be imported, so the row prices off the ex-works figure
+instead. The gross-up factors are lifted from the sheet's own formula rather
+than restated, so editing them in row 1 still reprices every row.
+
+The `<=` matches the Qty colouring below exactly: a green cell always means the
+catalogue's landed cost, a yellow one always means an import. The Pricing Tool
+Converter tab draws that line at `<` instead, so an order for exactly the stock
+on hand is treated as an import there and as covered here.
 
 `U.P. Ex.` stays yours to key — every costed column follows from it.
 
@@ -309,10 +314,8 @@ covers the order, **yellow** once the quantity is greater. These are rules
 rather than painted fills, so they keep up as quantities are retyped in Excel.
 A row with no stock figure stays uncoloured — no figure is not a stock of zero.
 
-Note the boundary: a quantity **equal** to stock is coloured green, while
-`U. Landed` switches to the ex-works branch at `Qty < Stock`, so that one row
-reads as covered but prices as an import. Aligning them is a one-character
-change in either direction.
+The colours and `U. Landed` share the one boundary, so the colour always tells
+you which cost the row is on.
 
 ---
 
