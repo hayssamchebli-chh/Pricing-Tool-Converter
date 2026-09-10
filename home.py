@@ -31,6 +31,8 @@ PAGES = [
             url_path="pricing-tool", default=True),
     st.Page("last_purchase.py", title="Last Purchase Price", icon="🧾",
             url_path="last-purchase-price"),
+    st.Page("cost_customer.py", title="Cost + Customer Pricing Tool", icon="🧮",
+            url_path="cost-customer-pricing"),
 ]
 
 try:

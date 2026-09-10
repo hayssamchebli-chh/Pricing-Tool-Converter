@@ -1,11 +1,12 @@
 # Pricing Tool Converter
 
-Two tendering tools in one Streamlit app, a tab each:
+Three tendering tools in one Streamlit app, a tab each:
 
 | Tab | Turns | Into |
 | --- | --- | --- |
 | **Pricing Tool Converter** | a supplier catalogue extract, the `Sheet7` / `Sheet9` layout | the six offer sheets and the `Summary` of `pricing tool.xlsx` |
 | **Last Purchase Price** | a purchase-history export | an Order workbook carrying the three most recent prices per item |
+| **Cost + Customer Pricing Tool** | a customer sales report, a catalogue extract and either a Calcul workbook or a BOQ | the `Calcul` offer sheet with its price history, descriptions and reference columns filled |
 
 ## Running it
 
@@ -244,6 +245,65 @@ being outside what it writes.
 
 ---
 
+# The Cost + Customer Pricing Tool tab
+
+Fills a `Calcul`-layout offer sheet: what this customer last paid, what the
+catalogue says about the item, and the landed cost that follows from both.
+
+## What goes in
+
+| Upload | Supplies |
+| --- | --- |
+| **Customer sales report** (required) | the three `Last U.P. / Cur. / Date` blocks |
+| **Special Inquiry Worksheet** (required) | `Description`, `Stock AV (BC)`, `Landed usd (BC)` |
+| **Calcul workbook** *or* **BOQ** | the offer lines themselves |
+
+The sales report is the RICH MOTORS-style export: posting date, item no.,
+quantity, price and currency. The Special Inquiry Worksheet is the same
+catalogue extract the first tab reads, so the two tabs accept the same file.
+
+## Which price lands in Last U.P.
+
+**OC Net Price**, paired with the report's **Currency** — the price as actually
+invoiced, in the currency it was struck in. The other two columns (`Net Price`,
+`Pre-Discount Price USD`) are USD whatever the sale's currency, so pairing
+either with `Cur.` would label a USD figure `EUR`. The sidebar can switch to
+them anyway when a report needs it.
+
+A negative quantity is a credit memo reversing an invoice, not a price the
+customer paid, so those lines are skipped — **Include credit memos** overrides
+that. **Collapse repeated lines** counts lines sharing a date, price *and*
+currency as one sale. The same item sold twice on one date in two currencies is
+two distinct sales and takes two slots.
+
+## The BOQ box
+
+Upload a BOQ in the sidebar and the offer is raised from its item codes and
+quantities on the app's own Calcul template, so no Calcul workbook is needed.
+Descriptions come from the catalogue. The totals block keeps its formulas and
+slides to sit under the data, however many rows that turns out to be — above or
+below the template's hundred.
+
+Leave the box empty and you upload a Calcul workbook instead; its own figures,
+`U.P. Ex.` included, are left exactly as they are.
+
+## U. Landed
+
+Rewritten to the condition the other offer sheets use:
+
+```
+=IF(Qty < Stock AV, Landed usd, IF(D.U.P. Ex.="", "", D.U.P. Ex. * factors))
+```
+
+A quantity the stock covers takes the landed cost as uploaded; reaching it means
+the order has to be imported, so the row prices off the ex-works figure instead.
+The gross-up factors are lifted from the sheet's own formula rather than
+restated, so editing them in row 1 still reprices every row.
+
+`U.P. Ex.` stays yours to key — every costed column follows from it.
+
+---
+
 ## Files
 
 | File | Contents |
@@ -259,13 +319,22 @@ being outside what it writes.
 | `last_purchase.py` | Last Purchase Price UI |
 | `purchases.py` | reading the history, ranking prices, writing the Order |
 | `template/order_template.xlsx` | the blank Order |
+| `cost_customer.py` | Cost + Customer Pricing Tool UI |
+| `pricing.py` | reading the sales report, ranking sales, writing Calcul |
+| `template/calcul_template.xlsx` | the blank Calcul offer sheet |
 
-`purchases.py` shares nothing with `builder.py` or `catalog.py` — the two tabs
-sit side by side without touching each other's code. It also runs on its own:
+`purchases.py` shares nothing with `builder.py` or `catalog.py`, and `pricing.py`
+borrows only `catalog.py`'s readers — no tab can break another's code. Both also
+run on their own:
 
 ```bash
 python purchases.py "last purchases.xlsx" -o "Order.xlsx"
 python purchases.py "last purchases.xlsx" --into "Order.xlsx" -o "Order filled.xlsx"
+```
+
+```bash
+python pricing.py "RICH MOTORS REPORT.xlsx" "Special Inquiry Worksheet.xlsx" --into "Calcul.xlsx" -o "Calcul filled.xlsx"
+python pricing.py "RICH MOTORS REPORT.xlsx" "Special Inquiry Worksheet.xlsx" --boq "BOQ.xlsx" -o "Calcul.xlsx"
 ```
 
 ### Theme
