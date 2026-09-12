@@ -112,8 +112,8 @@ with right:
             calcul_file = st.file_uploader(
                 "Calcul workbook", type=["xlsx", "xlsm"],
                 help="The offer sheet to fill, matched on Item Code.")
-            st.caption("Its own figures are left alone — only the columns "
-                       "below are written.")
+            st.caption("Your codes, quantities and ex-works prices are kept; "
+                       "the costing formulas are rewritten.")
         else:
             calcul_file = None
             st.markdown("**Calcul workbook**")

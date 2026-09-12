@@ -80,6 +80,11 @@ CALCUL_TARGETS = {
     "landed": ["ulandedusd", "ulanded"],
     "ex_works": ["upexeur", "upex"],
     "disc_unit": ["dupexeur", "dupex"],
+    "disc": ["disc", "discount"],
+    "disc_total": ["dtpexeur", "dtpex"],
+    "total_landed": ["tlandedusd", "tlanded"],
+    "total": ["total"],
+    "margin": ["margin"],
     "stock": ["stockavbc", "stockav", "stockavailablequantity"],
     "landed_ref": ["landedusdbc", "landedusd"],
 }
@@ -89,9 +94,9 @@ DATE_FORMAT = "mm-dd-yy"
 TEXT_FORMAT = "General"
 
 # Qty against stock on hand: green while the stock covers the order, yellow
-# once it does not. Yellow is the one the reference workbooks already use for
-# this; the green is Excel's own "Good" fill, which stays legible under black.
-COVERED_FILL = PatternFill("solid", start_color="FFC6EFCE", end_color="FFC6EFCE")
+# once it does not. Both are the fills the pricing tool's own offer sheets
+# carry on that cell, so the two tabs read alike.
+COVERED_FILL = PatternFill("solid", start_color="FF92D050", end_color="FF92D050")
 SHORT_FILL = PatternFill("solid", start_color="FFFFFF00", end_color="FFFFFF00")
 
 
@@ -415,6 +420,69 @@ def _flag_quantities(worksheet, columns, first_row, last_row):
         )
 
 
+def _blank_when(worksheet, row, columns, key, watched, iferror=False):
+    """Wrap a cell's own formula so it yields "" while `watched` is blank.
+
+    The arithmetic is left exactly as the sheet had it — only a guard goes
+    round it — so a template with its own factors keeps them.
+    """
+    col = columns.get(key)
+    current = worksheet.cell(row, col).value if col else None
+    if not col or not watched or not isinstance(current, str) or current[:1] != "=":
+        return
+    guard = '{}=""'.format(watched)
+    body = current[1:]
+    if body.startswith('IF({},""'.format(guard)):
+        return                                   # already guarded, leave it be
+    if iferror:
+        body = "IFERROR({},0)".format(body)
+    worksheet.cell(row, col).value = '=IF({},"",{})'.format(guard, body)
+
+
+def _guard_row(worksheet, columns, row):
+    """Keep an uncosted row blank instead of showing 0.00 and #DIV/0!.
+
+    Nothing here is costed until a price is keyed into ``U.P. Ex.``, and a
+    sheet full of zeros and division errors reads like priced work that came
+    out worthless. Every cell keeps its formula and fills itself in the moment
+    the price arrives — the same guards the pricing tool's offer sheets use.
+
+    The chain runs ``U.P. Ex. -> D.U.P. Ex. -> U. Landed -> everything else``,
+    so each cell watches the one it divides or multiplies by: blank times a
+    number is ``#VALUE!``, which would be no better than the zeros.
+    """
+    ref = lambda key: "{}{}".format(get_column_letter(columns[key]), row)
+    landed = ref("landed") if "landed" in columns else None
+    ex_works = ref("ex_works") if "ex_works" in columns else None
+    disc_unit = ref("disc_unit") if "disc_unit" in columns else None
+    unit_price = ref("unit_price") if "unit_price" in columns else None
+
+    # The discounted ex-works price is the ex-works price until it is typed
+    # over, and the discount between them is then whatever that leaves.
+    if disc_unit and ex_works:
+        worksheet.cell(row, columns["disc_unit"]).value = (
+            '=IF({e}=0,"",{e})'.format(e=ex_works))
+    if "disc" in columns and ex_works and disc_unit:
+        worksheet.cell(row, columns["disc"]).value = (
+            '=IF({e}=0,"",1-{d}/{e})'.format(e=ex_works, d=disc_unit))
+
+    for key, watched in (("unit_price", landed), ("disc_total", disc_unit),
+                         ("total_landed", landed), ("total", unit_price)):
+        _blank_when(worksheet, row, columns, key, watched)
+    _blank_when(worksheet, row, columns, "margin", landed, iferror=True)
+
+
+def _guard_footer(worksheet, columns, first_footer_row, last_row):
+    """The net-margin cell divides by a total that is 0 on an uncosted sheet."""
+    col = columns.get("margin")
+    if not col:
+        return
+    for row in range(first_footer_row, last_row + 1):
+        current = worksheet.cell(row, col).value
+        if isinstance(current, str) and current[:1] == "=" and "IFERROR" not in current:
+            worksheet.cell(row, col).value = "=IFERROR({},0)".format(current[1:])
+
+
 def _write_history(worksheet, row, columns, history):
     """Fill the nine Last U.P. / Cur. / Date cells, newest sale first."""
     for slot in range(MAX_HISTORY):
@@ -457,17 +525,31 @@ def _fill_row(worksheet, row, columns, code, histories, catalog, gross_up):
     return history is not None, item is not None
 
 
+# A landed cell this app has already written. Re-running the tool on its own
+# output would otherwise wrap the guard round itself once per pass.
+_BUILT_LANDED = re.compile(r'^=IF\(.+?<=.+?,.+?,IF\(.+?="","",(?P<gross>.+)\)\)$')
+
+
 def _gross_up_for(worksheet, columns, proto_row, row):
     """The template's own ex-works gross-up, moved to `row`.
 
     ``=Q3*$O$1*$B$1`` on the prototype row becomes ``Q7*$O$1*$B$1`` — the
     expression without its ``=``, ready to drop into the landed IF.
+
+    A cell this app wrote before is unwrapped back to that expression first, so
+    filling an already-filled workbook rebuilds the formula rather than nesting
+    it inside a copy of itself.
     """
     if "landed" not in columns:
         return None
     original = worksheet.cell(proto_row, columns["landed"]).value
     if not isinstance(original, str) or not original.startswith("="):
         return None
+    while True:
+        built = _BUILT_LANDED.match(original)
+        if not built:
+            break
+        original = "=" + built.group("gross")
     moved = Translator(
         original, origin="{}{}".format(get_column_letter(columns["landed"]), proto_row)
     ).translate_formula("{}{}".format(get_column_letter(columns["landed"]), row))
@@ -528,6 +610,7 @@ def fill_calcul(source, histories, catalog, price_field=DEFAULT_PRICE_FIELD):
         gross_up = _gross_up_for(worksheet, columns, row, row)
         had_history, had_item = _fill_row(
             worksheet, row, columns, code, histories, catalog, gross_up)
+        _guard_row(worksheet, columns, row)
         matched.append(code)
         filled_rows.append(row)
         if not had_history:
@@ -537,6 +620,8 @@ def fill_calcul(source, histories, catalog, price_field=DEFAULT_PRICE_FIELD):
 
     if filled_rows:
         _flag_quantities(worksheet, columns, filled_rows[0], filled_rows[-1])
+    if footer_row:
+        _guard_footer(worksheet, columns, footer_row, worksheet.max_row)
 
     stream = io.BytesIO()
     workbook.save(stream)
@@ -602,6 +687,7 @@ def build_calcul(lines, histories, catalog, template=None):
                     row, footer_row, delta).lstrip("=")
             if gross_up_proto else None)
         _fill_row(worksheet, row, columns, code, histories, catalog, gross_up)
+        _guard_row(worksheet, columns, row)
         item = catalog.get(code.upper())
         if "description" in columns and not (item and item.description) and description:
             worksheet.cell(row, columns["description"]).value = description
@@ -620,6 +706,8 @@ def build_calcul(lines, histories, catalog, template=None):
                 cell.value = _rewrite_sum(shifted, first_data_row, last_data_row)
             else:
                 cell.value = value
+
+    _guard_footer(worksheet, columns, new_footer_row, worksheet.max_row)
 
     stream = io.BytesIO()
     workbook.save(stream)

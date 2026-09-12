@@ -322,6 +322,24 @@ on hand is treated as an import there and as covered here.
 
 `U.P. Ex.` stays yours to key — every costed column follows from it.
 
+## Uncosted rows stay blank
+
+A row nobody has priced yet shows nothing, rather than a column of `0.00` and
+`#DIV/0!` that reads like priced work which came out worthless. `U. Landed`,
+`U.P. (USD)`, `Disc.`, `D.T.P. Ex.`, `T. Landed`, `Total` and `Margin` all keep
+their formulas and fill themselves in the moment `U.P. Ex.` is keyed:
+
+| | Qty vs Stock | U.P. Ex. | U. Landed | Disc. | Margin |
+| --- | --- | --- | --- | --- | --- |
+| covered | 10 ≤ 288 | — | 1.49 from the catalogue | blank | 0.75 |
+| short | 9999 > 79 | — | blank | blank | blank |
+| short, priced | 9999 > 44 | 100 | 126.26, filled on the spot | 0.00 | 0.75 |
+
+Each cell watches the one it divides or multiplies by, because blank times a
+number is `#VALUE!` — which would be no better than the zeros. The guards are
+the same ones the Pricing Tool Converter's offer sheets use, and filling an
+already-filled workbook rebuilds them rather than nesting them.
+
 ## Qty colours
 
 The `Qty` cells are coloured against `Stock AV (BC)`: **green** while the stock
