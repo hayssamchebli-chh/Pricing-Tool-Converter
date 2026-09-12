@@ -34,15 +34,14 @@ TEMPLATE_PATH = Path(__file__).with_name("template") / "calcul_template.xlsx"
 
 MAX_HISTORY = 3
 
-# Which of the report's three price columns fills "Last U.P.". Only the order
-# currency pairs with the "Cur." column: the other two are USD whatever the
-# sale was struck in, so a EUR row would read as a USD figure labelled EUR.
+# What "Last U.P." should mean, rather than which column it comes from:
+# exports differ on the columns they carry, and a report with only a unit price
+# and a discount percentage can still answer both questions.
 PRICE_FIELDS = {
-    "oc_net": "OC Net Price (as invoiced, with its currency)",
-    "net": "Net Price (USD)",
-    "pre_discount": "Pre-Discount Price (USD)",
+    "net": "Net of line discount — as invoiced",
+    "gross": "Before line discount",
 }
-DEFAULT_PRICE_FIELD = "oc_net"
+DEFAULT_PRICE_FIELD = "net"
 
 SALES_ALIASES = {
     "item": ["no", "no1", "itemno", "itemno1", "itemcode", "item", "code",
@@ -50,11 +49,20 @@ SALES_ALIASES = {
     "description": ["description", "desc", "itemdescription", "itemname"],
     "date": ["postingdate", "date", "invoicedate", "documentdate",
              "postingdt"],
-    "oc_net": ["ocnetprice", "ocnet", "ordercurrencynetprice"],
-    "net": ["netprice", "net"],
-    "pre_discount": ["prediscountpriceusd", "prediscountprice", "prediscount",
-                     "grossprice", "listprice"],
-    "currency": ["currency", "cur", "curr", "ccy"],
+    # A net column already has the discount taken off. The order-currency one
+    # comes first: it is the figure that pairs with "Cur.", where a plain
+    # "Net Price" is usually USD however the sale was struck.
+    "net_price": ["ocnetprice", "ocnet", "ordercurrencynetprice", "netprice",
+                  "netunitprice"],
+    # A gross column still has the discount to come off.
+    "gross_price": ["unitpriceexclvat", "unitpriceexcludingvat", "unitpriceexvat",
+                    "priceexclvat", "unitprice", "prediscountpriceusd",
+                    "prediscountprice", "prediscount", "grossprice",
+                    "listprice", "price"],
+    "discount": ["linediscount", "linediscountpct", "linediscountpercent",
+                 "discount", "discountpct", "discountpercent"],
+    "currency": ["currency", "currencycode", "cur", "curr", "ccy",
+                 "ordercurrency"],
     "quantity": ["quantity", "qty"],
     "document": ["documentno", "document", "invoiceno", "docno"],
 }
@@ -113,6 +121,44 @@ def _resolve(columns, aliases):
 # --- the sales report ------------------------------------------------------
 
 
+def _discount_factor(series):
+    """``1 - discount``, whether the column stores 5 for 5% or 0.05.
+
+    Percent is assumed unless every non-zero entry is below 1, because a
+    column of plain ``1``s is far more likely to mean one percent than to be
+    giving the goods away.
+    """
+    values = pd.to_numeric(series, errors="coerce").fillna(0.0)
+    nonzero = values[values != 0].abs()
+    scale = 1.0 if len(nonzero) and nonzero.max() < 1 else 100.0
+    return 1.0 - values / scale
+
+
+def _price_series(frame, columns, price_field):
+    """The unit price each line carries, under the chosen meaning.
+
+    A report with an explicit net column is taken at its word. One carrying
+    only a gross price and a discount percentage has the discount applied
+    here, which is the same figure by another route.
+    """
+    gross = (pd.to_numeric(frame[columns["gross_price"]], errors="coerce")
+             if "gross_price" in columns else None)
+    net = (pd.to_numeric(frame[columns["net_price"]], errors="coerce")
+           if "net_price" in columns else None)
+
+    if price_field == "gross":
+        if gross is not None:
+            return gross, "gross price as reported"
+        return net, "net price (no gross column in this report)"
+
+    if net is not None:
+        return net, "net price as reported"
+    if gross is not None and "discount" in columns:
+        return (gross * _discount_factor(frame[columns["discount"]]),
+                "gross price less the line discount")
+    return gross, "unit price (no discount column in this report)"
+
+
 def read_sales(source, sheet_name=0, price_field=DEFAULT_PRICE_FIELD):
     """Load a customer sales report into a tidy frame.
 
@@ -120,7 +166,7 @@ def read_sales(source, sheet_name=0, price_field=DEFAULT_PRICE_FIELD):
     quantity and document number.
     """
     if price_field not in PRICE_FIELDS:
-        raise BuildError("Unknown price column {!r}.".format(price_field))
+        raise BuildError("Unknown price basis {!r}.".format(price_field))
 
     name = getattr(source, "name", str(source)).lower()
     if name.endswith(".csv") or name.endswith(".txt"):
@@ -129,18 +175,11 @@ def read_sales(source, sheet_name=0, price_field=DEFAULT_PRICE_FIELD):
         frame = pd.read_excel(source, sheet_name=sheet_name)
 
     columns = _resolve(frame.columns, SALES_ALIASES)
-    # The chosen price column, falling back through the others so a report
-    # missing one still builds rather than refusing outright.
-    for candidate in (price_field, "net", "oc_net", "pre_discount"):
-        if candidate in columns:
-            price_column, price_used = columns[candidate], candidate
-            break
-    else:
-        price_column = price_used = None
+    prices, price_used = _price_series(frame, columns, price_field)
 
     missing = [key for key in ("item", "date") if key not in columns]
-    if missing or price_column is None:
-        missing = missing + ([] if price_column else ["price"])
+    if missing or prices is None:
+        missing = missing + ([] if prices is not None else ["price"])
         raise BuildError(
             "Could not find the " + ", ".join(missing) + " column(s) in the "
             "sales report. Columns found: "
@@ -152,7 +191,7 @@ def read_sales(source, sheet_name=0, price_field=DEFAULT_PRICE_FIELD):
             "item": frame[columns["item"]],
             "description": frame[columns["description"]] if "description" in columns else "",
             "date": pd.to_datetime(frame[columns["date"]], errors="coerce"),
-            "price": pd.to_numeric(frame[price_column], errors="coerce"),
+            "price": prices,
             "currency": frame[columns["currency"]] if "currency" in columns else "",
             "quantity": (
                 pd.to_numeric(frame[columns["quantity"]], errors="coerce")

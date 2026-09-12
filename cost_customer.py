@@ -69,12 +69,12 @@ st.sidebar.caption(
 st.sidebar.divider()
 st.sidebar.header("Sales history")
 price_field = st.sidebar.selectbox(
-    "Price column", list(PRICE_FIELDS),
+    "Price basis", list(PRICE_FIELDS),
     index=list(PRICE_FIELDS).index(DEFAULT_PRICE_FIELD),
     format_func=lambda key: PRICE_FIELDS[key],
-    help="Which of the report's price columns fills Last U.P. Only the order "
-         "currency pairs with the Cur. column — the other two are USD however "
-         "the sale was struck.")
+    help="What Last U.P. should mean. A report carrying a net price is taken "
+         "at its word; one with only a unit price and a line discount has the "
+         "discount applied.")
 collapse = st.sidebar.checkbox(
     "Collapse repeated lines", value=True,
     help="Counts lines sharing a date, price and currency as one sale, so the "
@@ -196,6 +196,8 @@ metrics[1].metric("With sales history", with_history)
 metrics[2].metric("Found in catalogue", with_catalog)
 metrics[3].metric("Sales lines read", len(sales))
 
+st.caption("Last U.P. read as the **{}**.".format(sales.attrs.get(
+    "price_used", "price as reported")))
 if skipped:
     st.caption("Ignored, no catalogue header: " + ", ".join(skipped))
 if returns and not include_returns:

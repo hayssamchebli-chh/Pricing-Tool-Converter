@@ -258,17 +258,32 @@ catalogue says about the item, and the landed cost that follows from both.
 | **Special Inquiry Worksheet** (required) | `Description`, `Stock AV (BC)`, `Landed usd (BC)` |
 | **Calcul workbook** *or* **BOQ** | the offer lines themselves |
 
-The sales report is the RICH MOTORS-style export: posting date, item no.,
-quantity, price and currency. The Special Inquiry Worksheet is the same
-catalogue extract the first tab reads, so the two tabs accept the same file.
+The sales report needs a posting date, an item no., a price and — to be useful —
+a quantity and a currency. Headers are matched loosely, so both the RICH
+MOTORS-style export (`OC Net Price`, `Currency`) and the plainer
+`Unit Price Excl. VAT` / `Line Discount %` / `Currency Code` shape read
+correctly. The Special Inquiry Worksheet is the same catalogue extract the
+first tab reads, so the two tabs accept the same file.
 
 ## Which price lands in Last U.P.
 
-**OC Net Price**, paired with the report's **Currency** — the price as actually
-invoiced, in the currency it was struck in. The other two columns (`Net Price`,
-`Pre-Discount Price USD`) are USD whatever the sale's currency, so pairing
-either with `Cur.` would label a USD figure `EUR`. The sidebar can switch to
-them anyway when a report needs it.
+The sidebar picks what the figure should *mean*, not which column it comes
+from, because exports differ on the columns they carry:
+
+* **Net of line discount** (the default) — the price as actually invoiced.
+* **Before line discount** — the unit price with the discount still to come off.
+
+Reports carrying a net price outright (`OC Net Price`, `Net Price`) are taken at
+their word. One carrying only a unit price and a discount percentage
+(`Unit Price Excl. VAT` + `Line Discount %`) has the discount applied here,
+which reaches the same figure by another route. A discount column is read as a
+percentage unless every non-zero entry is below 1, in which case it is a
+fraction.
+
+Where a report offers both an order-currency net price and a USD one, the
+order-currency figure wins: that is the one that pairs with `Cur.`, and a USD
+number sitting beside `EUR` would be a lie. The review step names the column it
+settled on, so it is worth a glance on an unfamiliar export.
 
 A negative quantity is a credit memo reversing an invoice, not a price the
 customer paid, so those lines are skipped — **Include credit memos** overrides
