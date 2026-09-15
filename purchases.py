@@ -52,6 +52,12 @@ ORDER_TARGETS = {
     "date3": ["date3"],
 }
 
+# A Last U.P. header carries whatever currency the order was priced in - EUR,
+# USD, or none at all - and ORDER_TARGETS above only spells out EUR and bare.
+# This catches the rest: "Last U.P.(1) (USD)" normalises to "lastup1usd",
+# matched on the number with the currency tag dropped.
+_PRICE_HEADER = re.compile(r"^lastup([123])[a-z]*$")
+
 
 class BuildError(Exception):
     """Raised when an input file cannot be interpreted."""
@@ -181,6 +187,13 @@ def _map_order_columns(worksheet, header_row):
         if value is not None:
             labels[value] = col
     resolved = _resolve(labels, ORDER_TARGETS)
+    for label in labels:
+        match = _PRICE_HEADER.match(norm(label))
+        if not match:
+            continue
+        key = "price{}".format(match.group(1))
+        if key not in resolved:
+            resolved[key] = label
     return {logical: labels[label] for logical, label in resolved.items()}
 
 
